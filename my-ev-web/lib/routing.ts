@@ -143,3 +143,13 @@ export function formatDuration(sec: number): string {
   const h = Math.floor(min / 60)
   return `${h} ชม. ${min % 60} นาที`
 }
+
+// ทิศจากจุด a ไปจุด b (องศา 0 = เหนือ, 90 = ตะวันออก)
+export function bearingDegrees(a: LatLng, b: LatLng): number {
+  const toRad = (d: number) => (d * Math.PI) / 180
+  const y = Math.sin(toRad(b[1] - a[1])) * Math.cos(toRad(b[0]))
+  const x =
+    Math.cos(toRad(a[0])) * Math.sin(toRad(b[0])) -
+    Math.sin(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.cos(toRad(b[1] - a[1]))
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360
+}

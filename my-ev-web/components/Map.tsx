@@ -2,12 +2,14 @@
 
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
+import '@/lib/leaflet-global'
+import 'leaflet-rotate'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import type { Station, NearbyResponse } from '@/types/station'
 import { getProviderBrand, type ProviderBrand } from '@/lib/providers'
 import StationList, { formatDistance, type StationWithDistance } from '@/components/StationList'
 import NavigationPanel from '@/components/NavigationPanel'
-import { fetchRoute, haversineMeters, locateOnRoute, type LatLng, type Route } from '@/lib/routing'
+import { bearingDegrees, fetchRoute, haversineMeters, locateOnRoute, type LatLng, type Route } from '@/lib/routing'
 
 // เรียกผ่าน Next.js proxy (/api -> FastAPI) จึงไม่ติด CORS
 const API_BASE = '/api'
@@ -17,6 +19,11 @@ const DEFAULT_POSITION: [number, number] = [13.7563, 100.5018] // กรุง�
 const OFF_ROUTE_METERS = 60 // ออกนอกเส้นทางเกินนี้ → คำนวณเส้นทางใหม่
 const REROUTE_COOLDOWN_MS = 15000
 const ARRIVE_METERS = 40
+const HEADING_MIN_MOVE_METERS = 8 // ต้องขยับอย่างน้อยเท่านี้จึงคำนวณทิศจากการเคลื่อนที่
+const HEADING_MIN_SPEED = 1 // m/s — ต่ำกว่านี้ไม่เชื่อค่า heading จาก GPS
+const NAV_ZOOM = 17
+// เลื่อนตำแหน่งรถลงไปด้านล่างจอ (สัดส่วนความสูง) เพื่อให้เห็นถนนข้างหน้ามากขึ้น
+const LOOK_AHEAD_RATIO = 0.22
 
 const MARKER_SIZE = 34
 
@@ -54,13 +61,26 @@ function getMarkerIcon(brand: ProviderBrand | null): L.DivIcon {
 }
 
 // หมุดตำแหน่งผู้ใช้ (ใช้ Marker เพื่อให้อยู่เหนือเส้นทางเสมอ)
-const userIcon = L.divIcon({
+const userDotIcon = L.divIcon({
   className: '',
   html: `<div style="width:20px;height:20px;border-radius:50%;background:#2563eb;border:3px solid #fff;
     box-shadow:0 0 0 6px rgba(37,99,235,.25),0 2px 6px rgba(0,0,0,.35);"></div>`,
   iconSize: [20, 20],
   iconAnchor: [10, 10],
   popupAnchor: [0, -12],
+})
+
+// ลูกศรชี้ทิศรถ (ปลายลูกศรชี้ขึ้น = ทิศเหนือ แล้วหมุนตาม heading)
+const userArrowIcon = L.divIcon({
+  className: '',
+  html: `<div style="width:38px;height:38px;display:flex;align-items:center;justify-content:center;
+    border-radius:50%;background:rgba(37,99,235,.18);">
+    <svg viewBox="0 0 24 24" width="30" height="30" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))">
+      <path d="M12 2 4 21l8-4.2 8 4.2z" fill="#2563eb" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+    </svg></div>`,
+  iconSize: [38, 38],
+  iconAnchor: [19, 19],
+  popupAnchor: [0, -20],
 })
 
 // ตัดสถานีซ้ำ (ข้อมูลมีแถวซ้ำชื่อ+พิกัดเดียวกัน) และพิกัดที่ไม่ถูกต้อง
@@ -121,6 +141,13 @@ export default function Map() {
   const [navLoading, setNavLoading] = useState(false)
   const [navError, setNavError] = useState('')
   const [following, setFollowing] = useState(true)
+  const [heading, setHeading] = useState<number | null>(null) // ทิศที่รถมุ่งหน้า (องศา)
+  const [headingUp, setHeadingUp] = useState(true) // true = หมุนแผนที่ตามรถ, false = ทิศเหนืออยู่บน
+  const [mapBearing, setMapBearing] = useState(0)
+  const headingRef = useRef<number | null>(null)
+  const headingUpRef = useRef(true)
+  const lastHeadingPosRef = useRef<LatLng | null>(null)
+  const userMarkerRef = useRef<L.Marker | null>(null)
   const routeRef = useRef<Route | null>(null)
   const navStationRef = useRef<StationWithDistance | null>(null)
   const followingRef = useRef(true)
@@ -184,6 +211,54 @@ export default function Map() {
     watchIdRef.current = null
   }, [])
 
+  // หมุนแผนที่: heading-up → ทิศที่รถวิ่งชี้ขึ้นบนจอ, ไม่งั้นทิศเหนืออยู่บน
+  const applyBearing = useCallback(() => {
+    if (!map) return
+    const h = headingRef.current
+    const target = navStationRef.current && followingRef.current && headingUpRef.current && h !== null ? -h : 0
+    map.setBearing(target)
+    setMapBearing(target)
+  }, [map])
+
+  // เลื่อนแผนที่ให้รถอยู่ค่อนไปทางล่างของจอ (มองเห็นถนนข้างหน้า)
+  const followUser = useCallback(
+    (here: LatLng, animate: boolean) => {
+      if (!map) return
+      applyBearing()
+      const size = map.getSize()
+      const userPt = map.latLngToContainerPoint(here)
+      const centerPt = map.getSize().divideBy(2)
+      // จุดกึ่งกลางใหม่ = ตำแหน่งรถ ขยับขึ้นไปบนจอ LOOK_AHEAD_RATIO ของความสูง
+      const desired = userPt.subtract(L.point(0, size.y * LOOK_AHEAD_RATIO))
+      const target = map.containerPointToLatLng(desired)
+      if (userPt.distanceTo(centerPt) > size.y || !animate) map.setView(target, map.getZoom(), { animate })
+      else map.panTo(target, { animate, duration: 0.8 })
+    },
+    [map, applyBearing]
+  )
+
+  // ทิศของรถ: ใช้ heading จาก GPS เมื่อวิ่งเร็วพอ ไม่งั้นคำนวณจากการเคลื่อนที่ หรือทิศของเส้นทางข้างหน้า
+  const updateHeading = useCallback((here: LatLng, coords?: GeolocationCoordinates) => {
+    let h: number | null = null
+    if (coords && coords.heading !== null && !Number.isNaN(coords.heading) && (coords.speed ?? 0) >= HEADING_MIN_SPEED) {
+      h = coords.heading
+    } else if (lastHeadingPosRef.current && haversineMeters(lastHeadingPosRef.current, here) >= HEADING_MIN_MOVE_METERS) {
+      h = bearingDegrees(lastHeadingPosRef.current, here)
+    } else if (headingRef.current === null && routeRef.current) {
+      const r = routeRef.current
+      const { index } = locateOnRoute(r, here)
+      const ahead = r.coords[Math.min(index + 3, r.coords.length - 1)]
+      if (haversineMeters(here, ahead) > 3) h = bearingDegrees(here, ahead)
+    }
+    if (!lastHeadingPosRef.current || haversineMeters(lastHeadingPosRef.current, here) >= HEADING_MIN_MOVE_METERS) {
+      lastHeadingPosRef.current = here
+    }
+    if (h === null) return
+    headingRef.current = h
+    setHeading(h)
+    userMarkerRef.current?.setRotation((h * Math.PI) / 180)
+  }, [])
+
   // ติดตามตำแหน่งสด: อัปเดตหมุดผู้ใช้, เลื่อนแผนที่ตาม, คำนวณเส้นทางใหม่เมื่อออกนอกเส้นทาง
   const startWatching = useCallback(() => {
     stopWatching()
@@ -191,9 +266,10 @@ export default function Map() {
       (pos) => {
         const here: LatLng = [pos.coords.latitude, pos.coords.longitude]
         setUserPos(here)
-        if (followingRef.current) map?.panTo(here, { animate: true })
         const r = routeRef.current
         const station = navStationRef.current
+        updateHeading(here, pos.coords)
+        if (followingRef.current) followUser(here, true)
         if (!r || !station) return
         const { offRouteMeters } = locateOnRoute(r, here)
         if (offRouteMeters > OFF_ROUTE_METERS && Date.now() - lastRerouteRef.current > REROUTE_COOLDOWN_MS) {
@@ -203,7 +279,7 @@ export default function Map() {
       () => {},
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 15000 }
     )
-  }, [map, requestRoute, stopWatching])
+  }, [requestRoute, stopWatching, updateHeading, followUser])
 
   const startNavigation = useCallback(
     (s: StationWithDistance) => {
@@ -253,13 +329,36 @@ export default function Map() {
     routeRef.current = null
     setNavLoading(false)
     setNavError('')
-  }, [stopWatching])
+    headingRef.current = null
+    lastHeadingPosRef.current = null
+    setHeading(null)
+    map?.setBearing(0)
+    setMapBearing(0)
+  }, [stopWatching, map])
 
   const recenterOnUser = useCallback(() => {
     setFollowing(true)
     followingRef.current = true
-    if (userPos && map) map.flyTo(userPos, Math.max(map.getZoom(), 16), { duration: 0.6 })
-  }, [map, userPos])
+    if (!userPos || !map) return
+    if (headingRef.current === null) updateHeading(userPos)
+    map.setZoom(Math.max(map.getZoom(), NAV_ZOOM), { animate: false })
+    followUser(userPos, false)
+  }, [map, userPos, updateHeading, followUser])
+
+  // ปุ่มเข็มทิศ: สลับ หมุนตามรถ ↔ ทิศเหนืออยู่บน
+  const toggleHeadingUp = useCallback(() => {
+    const next = !headingUpRef.current
+    headingUpRef.current = next
+    setHeadingUp(next)
+    if (next && userPos) {
+      setFollowing(true)
+      followingRef.current = true
+      if (headingRef.current === null) updateHeading(userPos)
+      followUser(userPos, false)
+    } else {
+      applyBearing()
+    }
+  }, [userPos, updateHeading, followUser, applyBearing])
 
   // ผู้ใช้ลากแผนที่เอง → หยุดเลื่อนตามตำแหน่ง
   useEffect(() => {
@@ -388,6 +487,29 @@ export default function Map() {
           </button>
         )}
 
+        {navigating && route && (
+          <button
+            onClick={toggleHeadingUp}
+            title={headingUp ? 'กำลังหมุนแผนที่ตามรถ — กดเพื่อให้ทิศเหนืออยู่บน' : 'ทิศเหนืออยู่บน — กดเพื่อหมุนแผนที่ตามรถ'}
+            aria-label={headingUp ? 'สลับเป็นทิศเหนืออยู่บน' : 'หมุนแผนที่ตามรถ'}
+            className="absolute top-4 right-4 z-[1000] bg-white rounded-full shadow-lg hover:bg-gray-50 flex items-center gap-2 pl-1.5 pr-3 py-1.5 text-xs font-semibold text-gray-700"
+          >
+            <span className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center">
+              <svg
+                viewBox="0 0 24 24"
+                className="w-6 h-6 transition-transform duration-500"
+                style={{ transform: `rotate(${mapBearing}deg)` }}
+                aria-hidden="true"
+              >
+                <path d="M12 2 8 12h8z" fill="#dc2626" />
+                <path d="M12 22 8 12h8z" fill="#9ca3af" />
+                <text x="12" y="8.6" textAnchor="middle" fontSize="4.5" fontWeight="700" fill="#fff">N</text>
+              </svg>
+            </span>
+            {headingUp ? 'หมุนตามรถ' : 'ทิศเหนือขึ้น'}
+          </button>
+        )}
+
         {navigating && route && !following && (
           <button
             onClick={recenterOnUser}
@@ -397,7 +519,19 @@ export default function Map() {
           </button>
         )}
 
-        <MapContainer ref={setMap} center={DEFAULT_POSITION} zoom={12} scrollWheelZoom className="w-full h-full">
+        <MapContainer
+          ref={setMap}
+          center={DEFAULT_POSITION}
+          zoom={12}
+          scrollWheelZoom
+          rotate
+          bearing={0}
+          rotateControl={false}
+          touchRotate={false}
+          shiftKeyRotate={false}
+          compassBearing={false}
+          className="w-full h-full"
+        >
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · เส้นทาง &copy; <a href="https://project-osrm.org">OSRM</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -413,7 +547,14 @@ export default function Map() {
           )}
 
           {userLocated && userPos && (
-            <Marker position={userPos} icon={userIcon} zIndexOffset={2000}>
+            <Marker
+              ref={userMarkerRef}
+              position={userPos}
+              icon={navigating && heading !== null ? userArrowIcon : userDotIcon}
+              rotation={navigating && heading !== null ? (heading * Math.PI) / 180 : 0}
+              rotateWithView
+              zIndexOffset={2000}
+            >
               <Popup>ตำแหน่งของคุณ</Popup>
             </Marker>
           )}
