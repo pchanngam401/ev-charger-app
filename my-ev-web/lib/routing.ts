@@ -11,9 +11,15 @@ export interface RouteStep {
   location: LatLng
 }
 
+export interface RouteLeg {
+  distance: number // เมตร
+  duration: number // วินาที
+}
+
 export interface Route {
   distance: number // เมตร
   duration: number // วินาที
+  legs: RouteLeg[] // ช่วงระหว่างจุดแวะ (จำนวน = จุดแวะ + 1)
   coords: LatLng[]
   cumulative: number[] // ระยะสะสมจากจุดเริ่มถึงแต่ละจุดบนเส้นทาง (เมตร)
   steps: RouteStep[]
@@ -48,8 +54,8 @@ const MODIFIER_ICON: Record<string, string> = {
   uturn: '↶',
 }
 
-// แปลง maneuver ของ OSRM เป็นคำสั่งภาษาไทย
-function instruction(step: OsrmStep): { text: string; icon: string } {
+// แปลง maneuver ของ OSRM เป็นคำสั่งภาษาไทย (stopNo = ลำดับจุดแวะ ถ้าเป็นการถึงจุดแวะระหว่างทาง)
+function instruction(step: OsrmStep, stopNo?: number): { text: string; icon: string } {
   const { type, modifier, exit } = step.maneuver
   const road = step.name || step.ref || ''
   const onto = road ? ` เข้าสู่${road}` : ''
@@ -61,6 +67,7 @@ function instruction(step: OsrmStep): { text: string; icon: string } {
     case 'depart':
       return { text: road ? `ออกเดินทางตาม${road}` : 'ออกเดินทาง', icon: '🚗' }
     case 'arrive':
+      if (stopNo) return { text: `ถึงจุดแวะที่ ${stopNo}${side ? ` อยู่ทาง${side}มือ` : ''}`, icon: '⚡' }
       return { text: side ? `ถึงที่หมาย อยู่ทาง${side}มือ` : 'ถึงที่หมาย', icon: '🏁' }
     case 'new name':
       return { text: road ? `ตรงไปตาม${road}` : 'ตรงไป', icon: '↑' }
@@ -96,26 +103,51 @@ export function haversineMeters(a: LatLng, b: LatLng): number {
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
-export async function fetchRoute(from: LatLng, to: LatLng, signal?: AbortSignal): Promise<Route> {
-  const url = `${ROUTING_URL}/route/v1/driving/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson&steps=true`
+// คำนวณเส้นทางผ่านจุดตามลำดับ: points[0] = จุดเริ่ม, points[สุดท้าย] = ปลายทาง, ตรงกลาง = จุดแวะ
+export async function fetchRoute(points: LatLng[], signal?: AbortSignal): Promise<Route> {
+  if (points.length < 2) throw new Error('ต้องมีจุดเริ่มและปลายทาง')
+  const path = points.map((p) => `${p[1].toFixed(6)},${p[0].toFixed(6)}`).join(';')
+  const url = `${ROUTING_URL}/route/v1/driving/${path}?overview=full&geometries=geojson&steps=true`
   const res = await fetch(url, { signal })
   if (!res.ok) throw new Error(`คำนวณเส้นทางไม่สำเร็จ (${res.status})`)
   const json = await res.json()
-  if (json.code !== 'Ok' || !json.routes?.length) throw new Error('ไม่พบเส้นทางไปยังสถานีนี้')
+  if (json.code !== 'Ok' || !json.routes?.length) throw new Error('ไม่พบเส้นทาง')
 
   const r = json.routes[0]
   const coords: LatLng[] = r.geometry.coordinates.map((c: [number, number]) => [c[1], c[0]])
   const cumulative = [0]
   for (let i = 1; i < coords.length; i++) cumulative.push(cumulative[i - 1] + haversineMeters(coords[i - 1], coords[i]))
 
-  const steps: RouteStep[] = r.legs.flatMap((leg: { steps: OsrmStep[] }) =>
-    leg.steps.map((s) => ({
-      ...instruction(s),
-      distance: s.distance,
-      location: [s.maneuver.location[1], s.maneuver.location[0]] as LatLng,
-    }))
+  const legs: { steps: OsrmStep[]; distance: number; duration: number }[] = r.legs
+  const steps: RouteStep[] = legs.flatMap((leg, legIdx) =>
+    leg.steps
+      // ช่วงที่ 2 เป็นต้นไปไม่ต้องมีคำสั่ง "ออกเดินทาง" ซ้ำ
+      .filter((st) => !(legIdx > 0 && st.maneuver.type === 'depart'))
+      .map((st) => ({
+        ...instruction(st, st.maneuver.type === 'arrive' && legIdx < legs.length - 1 ? legIdx + 1 : undefined),
+        distance: st.distance,
+        location: [st.maneuver.location[1], st.maneuver.location[0]] as LatLng,
+      }))
   )
-  return { distance: r.distance, duration: r.duration, coords, cumulative, steps }
+  return {
+    distance: r.distance,
+    duration: r.duration,
+    legs: legs.map((l) => ({ distance: l.distance, duration: l.duration })),
+    coords,
+    cumulative,
+    steps,
+  }
+}
+
+// ลดจำนวนจุดของเส้นทางก่อนส่งให้ API (เก็บจุดที่ห่างกันอย่างน้อย minMeters)
+export function thinCoords(coords: LatLng[], minMeters = 200): LatLng[] {
+  if (coords.length <= 2) return coords
+  const out: LatLng[] = [coords[0]]
+  for (let i = 1; i < coords.length - 1; i++) {
+    if (haversineMeters(out[out.length - 1], coords[i]) >= minMeters) out.push(coords[i])
+  }
+  out.push(coords[coords.length - 1])
+  return out
 }
 
 // หาจุดบนเส้นทางที่ใกล้ตำแหน่งปัจจุบันที่สุด → ใช้คำนวณระยะที่เหลือและตรวจว่าออกนอกเส้นทางหรือไม่

@@ -1,12 +1,18 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { StationWithDistance } from '@/components/StationList'
-import { getProviderBrand } from '@/lib/providers'
 import { formatDuration, formatMeters, type LatLng, type Route } from '@/lib/routing'
 
+export interface NavTarget {
+  title: string // ชื่อปลายทาง
+  logo: string | null // โลโก้ผู้ให้บริการ (ถ้าปลายทางเป็นสถานี)
+  points: LatLng[] // จุดแวะตามลำดับ + ปลายทาง (ตัวสุดท้าย)
+  stopNames: string[] // ชื่อจุดแวะ (ไม่รวมปลายทาง)
+}
+
 interface Props {
-  station: StationWithDistance
+  target: NavTarget
+  reachedStops: number // ผ่านจุดแวะไปแล้วกี่จุด
   route: Route | null
   loading: boolean
   error: string
@@ -20,12 +26,19 @@ interface Props {
   onStepClick: (loc: LatLng) => void
 }
 
+function googleMapsUrl(t: NavTarget): string {
+  const dest = t.points[t.points.length - 1]
+  const params = new URLSearchParams({ api: '1', destination: `${dest[0]},${dest[1]}`, travelmode: 'driving' })
+  const way = t.points.slice(0, -1)
+  if (way.length) params.set('waypoints', way.map((p) => `${p[0]},${p[1]}`).join('|'))
+  return `https://www.google.com/maps/dir/?${params}`
+}
+
 // แผงนำทางด้านขวา: สรุประยะ/เวลา + คำสั่งเลี้ยวทีละขั้น
 export default function NavigationPanel({
-  station, route, loading, error, remaining, nextStepIndex, arrived, following,
+  target, reachedStops, route, loading, error, remaining, nextStepIndex, arrived, following,
   onCancel, onRetry, onRecenter, onStepClick,
 }: Props) {
-  const brand = getProviderBrand(station)
   const stepRefs = useRef<(HTMLLIElement | null)[]>([])
   // เวลาปัจจุบันสำหรับคำนวณเวลาถึง (อัปเดตทุก 30 วินาที)
   const [now, setNow] = useState(() => Date.now())
@@ -48,15 +61,18 @@ export default function NavigationPanel({
     <div className="flex flex-col h-full min-h-0">
       {/* หัวแผง: ปลายทาง */}
       <div className="px-4 py-3 border-b border-gray-100 shrink-0 flex items-center gap-3">
-        {brand ? (
+        {target.logo ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={brand.logo} alt={brand.name} width={36} height={36} className="w-9 h-9 rounded-lg border border-gray-200 shrink-0" />
+          <img src={target.logo} alt="" width={36} height={36} className="w-9 h-9 rounded-lg border border-gray-200 shrink-0" />
         ) : (
-          <div className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">⚡</div>
+          <div className="w-9 h-9 rounded-lg bg-red-500 text-white flex items-center justify-center shrink-0">🏁</div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] text-gray-500">กำลังนำทางไป</p>
-          <h2 className="text-sm font-bold text-gray-900 truncate">{station.Name}</h2>
+          <p className="text-[11px] text-gray-500">
+            กำลังนำทางไป
+            {target.stopNames.length > 0 && ` · แวะ ${target.stopNames.length} จุด`}
+          </p>
+          <h2 className="text-sm font-bold text-gray-900 truncate">{target.title}</h2>
         </div>
         <button
           onClick={onCancel}
@@ -85,7 +101,7 @@ export default function NavigationPanel({
           {/* สรุป + คำสั่งถัดไป */}
           <div className="px-4 py-3 shrink-0 bg-emerald-600 text-white">
             {arrived ? (
-              <p className="text-base font-bold">🏁 ถึงสถานีแล้ว</p>
+              <p className="text-base font-bold">🏁 ถึงปลายทางแล้ว</p>
             ) : (
               <>
                 <div className="flex items-baseline gap-2">
@@ -93,6 +109,11 @@ export default function NavigationPanel({
                   <span className="text-sm opacity-90 tabular-nums">· {formatMeters(remainingMeters)}</span>
                 </div>
                 <p className="text-xs opacity-80 mt-0.5">ถึงประมาณ {eta} น.{loading ? ' · กำลังคำนวณเส้นทางใหม่...' : ''}</p>
+                {reachedStops < target.stopNames.length && (
+                  <p className="text-xs mt-1.5 truncate">
+                    ⚡ จุดแวะถัดไป ({reachedStops + 1}/{target.stopNames.length}): <b>{target.stopNames[reachedStops]}</b>
+                  </p>
+                )}
                 {nextStep && (
                   <div className="mt-2.5 flex items-center gap-2.5 bg-white/15 rounded-lg px-3 py-2">
                     <span className="text-xl leading-none w-6 text-center">{nextStep.icon}</span>
@@ -136,7 +157,7 @@ export default function NavigationPanel({
               {following ? '📍 กำลังติดตามตำแหน่ง' : '📍 กลับไปที่ตำแหน่งฉัน'}
             </button>
             <a
-              href={`https://www.google.com/maps/dir/?api=1&destination=${station.Latitude},${station.Longitude}`}
+              href={googleMapsUrl(target)}
               target="_blank"
               rel="noopener noreferrer"
               className="text-[11px] text-gray-500 hover:text-gray-700 hover:underline"
