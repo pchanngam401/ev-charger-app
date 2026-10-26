@@ -38,7 +38,7 @@ const MARKER_SIZE = 34
 const defaultIcon = L.divIcon({
   className: '',
   html: `<div style="
-    width:30px;height:30px;background:#059669;border:3px solid #fff;border-radius:50%;
+    width:30px;height:30px;background:#d81324;border:3px solid #fff;border-radius:50%;
     box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;
     font-size:15px;line-height:1;">⚡</div>`,
   iconSize: [30, 30],
@@ -102,14 +102,14 @@ function endpointIcon(label: string, color: string): L.DivIcon {
     popupAnchor: [0, -30],
   })
 }
-const originIcon = endpointIcon('A', '#059669')
+const originIcon = endpointIcon('A', '#0b2154')
 const destinationIcon = endpointIcon('B', '#dc2626')
 
 // หมุดจุดแวะ: โลโก้ + กรอบน้ำเงิน + เลขลำดับ
 function stopIcon(brand: ProviderBrand | null, n: number): L.DivIcon {
   const inner = brand
     ? `<img src="${brand.logo}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:7px;" draggable="false" />`
-    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#059669;color:#fff;border-radius:7px;">⚡</div>`
+    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#d81324;color:#fff;border-radius:7px;">⚡</div>`
   return L.divIcon({
     className: '',
     html: `<div style="position:relative;width:40px;height:40px;border-radius:11px;background:#fff;border:3px solid #2563eb;
@@ -217,7 +217,7 @@ function StationPopup({ station, brand, extra, actions }: {
             {brand.name}
           </span>
         ) : (
-          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide">
+          <span className="bg-primary/10 text-primary text-[10px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wide">
             {station.Provider || 'EV'}
           </span>
         )}
@@ -228,7 +228,7 @@ function StationPopup({ station, brand, extra, actions }: {
           </span>
         )}
       </div>
-      <h3 className="font-bold text-sm text-gray-900">{station.Name}</h3>
+      <h3 className="font-bold text-sm text-secondary">{station.Name}</h3>
       {station.Address && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{station.Address}</p>}
       {station.description && (
         <div className="mt-2 pt-2 border-t border-gray-100">
@@ -242,7 +242,10 @@ function StationPopup({ station, brand, extra, actions }: {
 }
 
 export default function Map() {
-  const [mode, setMode] = useState<Mode>('nearby')
+  // เปิดเมนูตามลิงก์ เช่น /map?mode=route (คอมโพเนนต์นี้โหลดเฉพาะฝั่งเบราว์เซอร์)
+  const [mode, setMode] = useState<Mode>(() =>
+    new URLSearchParams(window.location.search).get('mode') === 'route' ? 'route' : 'nearby'
+  )
   const [position, setPosition] = useState<[number, number]>(DEFAULT_POSITION) // จุดศูนย์กลางการค้นหาใกล้ฉัน
   const [userLocated, setUserLocated] = useState(false)
   const [userPos, setUserPos] = useState<LatLng | null>(null) // ตำแหน่งจริงของผู้ใช้ (อัปเดตสดขณะนำทาง)
@@ -791,8 +794,8 @@ export default function Map() {
       {/* ── แผนที่ ── */}
       <div className={`relative flex-1 min-h-0 min-w-0 ${pickField ? 'cursor-crosshair [&_.leaflet-container]:!cursor-crosshair' : ''}`}>
         {mode === 'nearby' && !navigating && loading && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg text-sm text-emerald-700 flex items-center gap-2">
-            <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg text-sm text-primary flex items-center gap-2">
+            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             กำลังค้นหาสถานีใกล้คุณ...
           </div>
         )}
@@ -803,7 +806,7 @@ export default function Map() {
             <span className="truncate">{error}</span>
             <button
               onClick={() => fetchNearbyStations(position[0], position[1])}
-              className="ml-1 text-emerald-700 font-semibold hover:underline shrink-0"
+              className="ml-1 text-primary font-semibold hover:underline shrink-0"
             >
               ลองใหม่
             </button>
@@ -821,7 +824,7 @@ export default function Map() {
           <button
             onClick={handleGetLocation}
             disabled={loading}
-            className="absolute bottom-6 right-4 z-[1000] bg-emerald-600 text-white font-semibold px-5 py-3 rounded-full shadow-lg hover:bg-emerald-700 transition-all disabled:opacity-60 flex items-center gap-2 text-sm"
+            className="absolute bottom-6 right-4 z-[1000] bg-primary text-white font-semibold px-5 py-3 rounded-full shadow-lg hover:bg-primary-dark transition-all disabled:opacity-60 flex items-center gap-2 text-sm"
           >
             <span>🎯</span>
             {loading ? 'กำลังค้นหา...' : 'ค้นหาใกล้ฉัน'}
@@ -854,7 +857,7 @@ export default function Map() {
         {navigating && route && !following && (
           <button
             onClick={recenterOnUser}
-            className="absolute bottom-6 right-4 z-[1000] bg-white text-emerald-700 font-semibold px-4 py-2.5 rounded-full shadow-lg hover:bg-emerald-50 flex items-center gap-2 text-sm"
+            className="absolute bottom-6 right-4 z-[1000] bg-white text-primary font-semibold px-4 py-2.5 rounded-full shadow-lg hover:bg-primary/5 flex items-center gap-2 text-sm"
           >
             📍 ตำแหน่งฉัน
           </button>
@@ -918,11 +921,11 @@ export default function Map() {
                     <StationPopup
                       station={station}
                       brand={brand}
-                      extra={<span className="whitespace-nowrap text-[10px] font-semibold text-emerald-700">{formatDistance(station.distanceKm)}</span>}
+                      extra={<span className="whitespace-nowrap text-[10px] font-semibold text-primary">{formatDistance(station.distanceKm)}</span>}
                       actions={
                         <button
                           onClick={() => startNavigation(station)}
-                          className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold py-2 rounded-lg"
+                          className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-semibold py-2 rounded-lg"
                         >
                           <NavIcon /> นำทาง
                         </button>
@@ -970,7 +973,7 @@ export default function Map() {
                       station={station}
                       brand={brand}
                       extra={
-                        <span className="whitespace-nowrap text-[10px] font-semibold text-emerald-700">
+                        <span className="whitespace-nowrap text-[10px] font-semibold text-primary">
                           กม. {(station.distance_along_route_m / 1000).toFixed(1)}
                           {station.distance_from_route_m >= 150 && ` · ห่างทาง ${formatMeters(station.distance_from_route_m)}`}
                         </span>
@@ -1045,7 +1048,7 @@ export default function Map() {
         ) : (
           <>
             {/* เมนู */}
-            <div role="tablist" aria-label="เมนู" className="shrink-0 grid grid-cols-2 gap-1 p-1.5 m-2 mb-0 bg-gray-100 rounded-xl">
+            <div role="tablist" aria-label="เมนู" className="shrink-0 grid grid-cols-2 gap-1 p-1 m-2 mb-0 bg-light rounded-[3px]">
               {([
                 ['nearby', '📍 ใกล้ฉัน'],
                 ['route', '🧭 ค้นหาเส้นทาง'],
@@ -1055,8 +1058,8 @@ export default function Map() {
                   role="tab"
                   aria-selected={mode === m}
                   onClick={() => switchMode(m)}
-                  className={`py-2 rounded-lg text-sm font-semibold transition-colors ${
-                    mode === m ? 'bg-white text-emerald-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
+                  className={`py-2 rounded-[3px] font-heading text-[15px] font-semibold transition-colors ${
+                    mode === m ? 'bg-primary text-white shadow-sm' : 'text-secondary hover:bg-white'
                   }`}
                 >
                   {label}

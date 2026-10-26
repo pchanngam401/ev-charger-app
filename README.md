@@ -18,6 +18,16 @@
      └────────────── ค้นหาสถานที่ ──────────────▶ Photon (OpenStreetMap)
 ```
 
+## หน้าเว็บ
+
+| URL | หน้า |
+|---|---|
+| `/` | หน้าแรก (hero, ฟีเจอร์, ผู้ให้บริการ, วิธีใช้งาน) |
+| `/map` | แผนที่ — เมนูใกล้ฉัน |
+| `/map?mode=route` | แผนที่ — เมนูค้นหาเส้นทาง |
+
+ดีไซน์อิงจาก template [SEOcom](https://htmlcodex.com/seo-company-website-template) โดย HTML Codex (CC BY 4.0) — ต้องคงลิงก์ "Designed By HTML Codex" ไว้ที่ footer ตามสัญญาอนุญาต
+
 ## รันบนเครื่อง (dev)
 
 **API**

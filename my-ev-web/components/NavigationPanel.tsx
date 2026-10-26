@@ -72,7 +72,7 @@ export default function NavigationPanel({
             กำลังนำทางไป
             {target.stopNames.length > 0 && ` · แวะ ${target.stopNames.length} จุด`}
           </p>
-          <h2 className="text-sm font-bold text-gray-900 truncate">{target.title}</h2>
+          <h2 className="text-sm font-bold text-secondary truncate">{target.title}</h2>
         </div>
         <button
           onClick={onCancel}
@@ -84,7 +84,7 @@ export default function NavigationPanel({
 
       {loading && !route && (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-sm text-gray-500">
-          <div className="w-6 h-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           กำลังคำนวณเส้นทาง...
         </div>
       )}
@@ -92,14 +92,14 @@ export default function NavigationPanel({
       {error && !route && (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-sm text-amber-700">⚠️ {error}</p>
-          <button onClick={onRetry} className="text-sm font-semibold text-emerald-700 hover:underline">ลองใหม่</button>
+          <button onClick={onRetry} className="text-sm font-semibold text-primary hover:underline">ลองใหม่</button>
         </div>
       )}
 
       {route && (
         <>
           {/* สรุป + คำสั่งถัดไป */}
-          <div className="px-4 py-3 shrink-0 bg-emerald-600 text-white">
+          <div className="px-4 py-3 shrink-0 bg-secondary text-white">
             {arrived ? (
               <p className="text-base font-bold">🏁 ถึงปลายทางแล้ว</p>
             ) : (
@@ -133,9 +133,9 @@ export default function NavigationPanel({
                 <li key={i} ref={(el) => { stepRefs.current[i] = el }}>
                   <button
                     onClick={() => onStepClick(step.location)}
-                    className={`w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 ${current ? 'bg-emerald-50' : ''} ${done ? 'opacity-45' : ''}`}
+                    className={`w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 ${current ? 'bg-primary/5' : ''} ${done ? 'opacity-45' : ''}`}
                   >
-                    <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm ${current ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                    <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm ${current ? 'bg-primary text-white' : 'bg-light text-secondary'}`}>
                       {step.icon}
                     </span>
                     <span className="flex-1 min-w-0 text-[13px] text-gray-800 leading-snug">{step.text}</span>
@@ -152,7 +152,7 @@ export default function NavigationPanel({
             <button
               onClick={onRecenter}
               disabled={following}
-              className="text-xs font-semibold text-emerald-700 disabled:text-gray-400 hover:underline disabled:no-underline"
+              className="text-xs font-semibold text-primary disabled:text-gray-400 hover:underline disabled:no-underline"
             >
               {following ? '📍 กำลังติดตามตำแหน่ง' : '📍 กลับไปที่ตำแหน่งฉัน'}
             </button>

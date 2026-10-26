@@ -10,8 +10,13 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.7",
+    "@fontsource/barlow": "5.2.8",
+    "@fontsource/kanit": "5.2.8",
+    "@fontsource/sarabun": "5.2.8",
+    "@fontsource/ubuntu": "5.2.8",
     "leaflet": "^1.9.4",
     "leaflet-rotate": "0.2.8",
+    "lucide-react": "1.61.0",
     "next": "16.3.7",
     "react": "19.2.8",
     "react-dom": "19.2.8",

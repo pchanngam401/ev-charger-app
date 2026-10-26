@@ -11,7 +11,7 @@ export interface PlanPoint {
 
 interface Props {
   label: string
-  dotClass: string // สีจุดหน้าช่อง เช่น bg-emerald-500
+  dotClass: string // สีจุดหน้าช่อง เช่น bg-primary/50
   value: PlanPoint | null
   placeholder: string
   allowMyLocation?: boolean
@@ -83,7 +83,7 @@ export default function PlaceInput({
 
   return (
     <div ref={boxRef} className="relative">
-      <label className="flex items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-3 py-2 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+      <label className="flex items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-3 py-2 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15">
         <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dotClass}`} aria-hidden="true" />
         <span className="sr-only">{label}</span>
         <input
@@ -101,7 +101,7 @@ export default function PlaceInput({
             if (e.key === 'Escape') setEditing(false)
           }}
           placeholder={picking ? 'แตะบนแผนที่เพื่อเลือกจุด...' : placeholder}
-          className="flex-1 min-w-0 bg-transparent text-sm text-gray-900 placeholder:text-gray-400 outline-none"
+          className="flex-1 min-w-0 bg-transparent text-sm text-secondary placeholder:text-gray-400 outline-none"
           aria-label={label}
         />
         {value && !editing && (
@@ -149,9 +149,9 @@ export default function PlaceInput({
                   <button
                     type="button"
                     onClick={() => choose({ name: r.name, pos: r.pos })}
-                    className="w-full text-left px-3 py-2 hover:bg-emerald-50"
+                    className="w-full text-left px-3 py-2 hover:bg-primary/5"
                   >
-                    <span className="block text-sm text-gray-900 truncate">{r.name}</span>
+                    <span className="block text-sm text-secondary truncate">{r.name}</span>
                     {r.detail && <span className="block text-[11px] text-gray-500 truncate">{r.detail}</span>}
                   </button>
                 </li>
