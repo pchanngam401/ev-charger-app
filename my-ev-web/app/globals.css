@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "leaflet/dist/leaflet.css";
+@import "maplibre-gl/dist/maplibre-gl.css";
 
 /* ธีมตาม template Mailler - SaaS Website Template (HTML Codex)
    ฟอนต์ Plus Jakarta Sans / Rubik ไม่มีตัวอักษรไทย จึงจับคู่ Prompt (หัวข้อ) และ Sarabun (เนื้อหา) เป็น fallback */
@@ -202,13 +202,23 @@
   }
 }
 
-/* Leaflet container fix */
-.leaflet-container {
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  font-family: var(--font-sans);
+/* MapLibre: popup และปุ่มเครดิตให้เข้ากับธีม */
+.maplibregl-map { font-family: var(--font-sans); }
+.maplibregl-popup-content {
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 24px rgba(53, 63, 79, 0.18);
+  font-size: 13px;
+  color: var(--color-dark);
 }
+.maplibregl-popup-close-button {
+  font-size: 18px;
+  padding: 0 6px;
+  border-radius: 0 14px 0 8px;
+  color: #9ca3af;
+}
+.maplibregl-popup-close-button:hover { background: var(--color-light); color: var(--color-dark); }
+.maplibregl-marker { line-height: 0; }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar { width: 6px; }

@@ -9,7 +9,7 @@
 
 | โฟลเดอร์ | คืออะไร | เทคโนโลยี |
 |---|---|---|
-| `my-ev-web/` | หน้าเว็บ + แผนที่ + นำทาง | Next.js, React Leaflet, Tailwind CSS |
+| `my-ev-web/` | หน้าเว็บ + แผนที่ + นำทาง | Next.js, MapLibre GL (แผนที่ OpenFreeMap Liberty), Tailwind CSS |
 | `my-ev-api/` | API ค้นหาสถานีใกล้ฉัน | Python FastAPI + Supabase (PostGIS) |
 
 ```
@@ -65,6 +65,7 @@ npm run dev                   # http://localhost:3000
    - `API_URL` = `https://<api>.vercel.app` (ไม่มี `/` ท้าย)
    - (ไม่บังคับ) `NEXT_PUBLIC_ROUTING_URL` = เซิร์ฟเวอร์ OSRM ของคุณเอง
    - (ไม่บังคับ) `NEXT_PUBLIC_GEOCODER_URL` = เซิร์ฟเวอร์ Photon ของคุณเอง
+   - (ไม่บังคับ) `NEXT_PUBLIC_MAP_STYLE` = สไตล์แผนที่ (ค่าเริ่มต้น `https://tiles.openfreemap.org/styles/liberty` — เปลี่ยนเป็น `.../positron` หรือ `.../bright` ได้)
 4. Deploy
 
 > ถ้าแก้ `API_URL` ภายหลัง ต้อง **Redeploy** เว็บ เพราะค่า proxy ถูกกำหนดตอน build

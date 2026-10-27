@@ -1,9 +1,7 @@
 'use client'
 
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet'
-import L from 'leaflet'
-import '@/lib/leaflet-global'
-import 'leaflet-rotate'
+import MapGL, { Marker, Popup, Source, Layer, type MarkerEvent } from 'react-map-gl/maplibre'
+import type { Map as MLMap } from 'maplibre-gl'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import type { Station, NearbyResponse } from '@/types/station'
 import { getProviderBrand, type ProviderBrand } from '@/lib/providers'
@@ -28,98 +26,140 @@ const STOP_ARRIVE_METERS = 80 // เข้าใกล้จุดแวะเ�
 const DEFAULT_BUFFER_KM = 3
 const HEADING_MIN_MOVE_METERS = 8 // ต้องขยับอย่างน้อยเท่านี้จึงคำนวณทิศจากการเคลื่อนที่
 const HEADING_MIN_SPEED = 1 // m/s — ต่ำกว่านี้ไม่เชื่อค่า heading จาก GPS
-const NAV_ZOOM = 17
+const NAV_ZOOM = 16.5 // MapLibre ใช้ tile 512px → zoom น้อยกว่า Leaflet ประมาณ 1 ระดับ
 // เลื่อนตำแหน่งรถลงไปด้านล่างจอ (สัดส่วนความสูง) เพื่อให้เห็นถนนข้างหน้ามากขึ้น
 const LOOK_AHEAD_RATIO = 0.22
 
 const MARKER_SIZE = 34
+const MAP_STYLE = process.env.NEXT_PUBLIC_MAP_STYLE || 'https://tiles.openfreemap.org/styles/liberty'
+const NAV_PITCH = 45 // เอียงแผนที่ตอนนำทางแบบหมุนตามรถ (เห็นตึก 3D)
+const THAI_NAME = ['coalesce', ['get', 'name:th'], ['get', 'name'], ['get', 'name:latin']]
+
+// ใช้ชื่อภาษาไทยในป้ายชื่อทุกชั้น (ยกเว้นป้ายเลขทางหลวง/บ้านเลขที่ ที่ไม่ได้ใช้ชื่อ)
+function applyThaiLabels(m: MLMap): string | undefined {
+  let firstSymbol: string | undefined
+  for (const layer of m.getStyle().layers) {
+    if (layer.type !== 'symbol') continue
+    firstSymbol ??= layer.id
+    const field = m.getLayoutProperty(layer.id, 'text-field')
+    if (field && JSON.stringify(field).includes('name')) m.setLayoutProperty(layer.id, 'text-field', THAI_NAME)
+  }
+  return firstSymbol
+}
 
 // หมุดสำรองสำหรับสถานีที่ไม่รู้จัก provider
-const defaultIcon = L.divIcon({
-  className: '',
-  html: `<div style="
-    width:30px;height:30px;background:#f74780;border:3px solid #fff;border-radius:50%;
-    box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;
-    font-size:15px;line-height:1;">⚡</div>`,
-  iconSize: [30, 30],
-  iconAnchor: [15, 15],
-  popupAnchor: [0, -18],
-})
+function DefaultPin() {
+  return (
+    <div style={{
+      width: 30, height: 30, background: '#f74780', border: '3px solid #fff', borderRadius: '50%',
+      boxShadow: '0 2px 8px rgba(0,0,0,.3)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 15, lineHeight: 1,
+    }}>⚡</div>
+  )
+}
 
-// หมุดโลโก้จริงของแต่ละ provider (สร้างครั้งเดียวแล้ว cache ไว้ต่อแบรนด์)
-const iconCache: Record<string, L.DivIcon> = {}
-function getMarkerIcon(brand: ProviderBrand | null): L.DivIcon {
-  if (!brand) return defaultIcon
-  if (!iconCache[brand.key]) {
-    iconCache[brand.key] = L.divIcon({
-      className: '',
-      html: `<div style="
-        width:${MARKER_SIZE}px;height:${MARKER_SIZE}px;border-radius:10px;overflow:hidden;
-        background:#fff;border:2.5px solid ${brand.color};box-shadow:0 2px 8px rgba(0,0,0,.35);">
-        <img src="${brand.logo}" alt="${brand.name}" width="${MARKER_SIZE}" height="${MARKER_SIZE}"
-          style="width:100%;height:100%;object-fit:cover;display:block;" draggable="false" />
-      </div>`,
-      iconSize: [MARKER_SIZE, MARKER_SIZE],
-      iconAnchor: [MARKER_SIZE / 2, MARKER_SIZE / 2],
-      popupAnchor: [0, -MARKER_SIZE / 2 - 4],
-    })
+// หมุดโลโก้จริงของแต่ละ provider
+function StationPin({ brand }: { brand: ProviderBrand | null }) {
+  if (!brand) return <DefaultPin />
+  return (
+    <div style={{
+      width: MARKER_SIZE, height: MARKER_SIZE, borderRadius: 10, overflow: 'hidden', background: '#fff',
+      border: `2.5px solid ${brand.color}`, boxShadow: '0 2px 8px rgba(0,0,0,.35)', cursor: 'pointer',
+    }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={brand.logo} alt={brand.name} width={MARKER_SIZE} height={MARKER_SIZE} draggable={false}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+    </div>
+  )
+}
+
+// หมุดตำแหน่งผู้ใช้
+function UserDot() {
+  return (
+    <div style={{
+      width: 20, height: 20, borderRadius: '50%', background: '#2563eb', border: '3px solid #fff',
+      boxShadow: '0 0 0 6px rgba(37,99,235,.25),0 2px 6px rgba(0,0,0,.35)',
+    }} />
+  )
+}
+
+// ลูกศรชี้ทิศรถ (ปลายลูกศรชี้ทิศเหนือ แล้วหมุนตาม heading)
+function UserArrow() {
+  return (
+    <div style={{
+      width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      borderRadius: '50%', background: 'rgba(37,99,235,.18)',
+    }}>
+      <svg viewBox="0 0 24 24" width="30" height="30" style={{ filter: 'drop-shadow(0 2px 3px rgba(0,0,0,.35))' }}>
+        <path d="M12 2 4 21l8-4.2 8 4.2z" fill="#2563eb" stroke="#fff" strokeWidth="2" strokeLinejoin="round" />
+      </svg>
+    </div>
+  )
+}
+
+// หมุดจุดเริ่ม (A) / ปลายทาง (B) ของเมนูค้นหาเส้นทาง (ปลายหมุดอยู่ด้านล่าง → anchor="bottom")
+function EndpointPin({ label, color }: { label: string; color: string }) {
+  return (
+    <div style={{
+      width: 30, height: 30, borderRadius: '50% 50% 50% 0', transform: 'rotate(-45deg)', background: color,
+      border: '3px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,.35)', display: 'flex', alignItems: 'center',
+      justifyContent: 'center', marginBottom: 6, cursor: 'pointer',
+    }}>
+      <span style={{ transform: 'rotate(45deg)', color: '#fff', font: '700 13px/1 system-ui,sans-serif' }}>{label}</span>
+    </div>
+  )
+}
+
+// หมุดจุดแวะ: โลโก้ + กรอบม่วง + เลขลำดับ
+function StopPin({ brand, n }: { brand: ProviderBrand | null; n: number }) {
+  return (
+    <div style={{
+      position: 'relative', width: 40, height: 40, borderRadius: 11, background: '#fff', border: '3px solid #6610f2',
+      boxShadow: '0 2px 10px rgba(102,16,242,.45)', padding: 1, cursor: 'pointer',
+    }}>
+      {brand ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={brand.logo} alt="" draggable={false}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', borderRadius: 7 }} />
+      ) : (
+        <div style={{
+          width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: '#f74780', color: '#fff', borderRadius: 7,
+        }}>⚡</div>
+      )}
+      <span style={{
+        position: 'absolute', top: -9, right: -9, minWidth: 20, height: 20, padding: '0 4px', borderRadius: 10,
+        background: '#6610f2', color: '#fff', font: '700 11px/16px system-ui,sans-serif', textAlign: 'center',
+        border: '2px solid #fff',
+      }}>{n}</span>
+    </div>
+  )
+}
+
+// กรอบพิกัดของเส้นทาง สำหรับ fitBounds ([lng,lat])
+function routeBounds(coords: LatLng[]): [[number, number], [number, number]] {
+  let minLat = 90, minLng = 180, maxLat = -90, maxLng = -180
+  for (const [lat, lng] of coords) {
+    if (lat < minLat) minLat = lat
+    if (lat > maxLat) maxLat = lat
+    if (lng < minLng) minLng = lng
+    if (lng > maxLng) maxLng = lng
   }
-  return iconCache[brand.key]
+  return [[minLng, minLat], [maxLng, maxLat]]
 }
 
-// หมุดตำแหน่งผู้ใช้ (ใช้ Marker เพื่อให้อยู่เหนือเส้นทางเสมอ)
-const userDotIcon = L.divIcon({
-  className: '',
-  html: `<div style="width:20px;height:20px;border-radius:50%;background:#2563eb;border:3px solid #fff;
-    box-shadow:0 0 0 6px rgba(37,99,235,.25),0 2px 6px rgba(0,0,0,.35);"></div>`,
-  iconSize: [20, 20],
-  iconAnchor: [10, 10],
-  popupAnchor: [0, -12],
-})
-
-// ลูกศรชี้ทิศรถ (ปลายลูกศรชี้ขึ้น = ทิศเหนือ แล้วหมุนตาม heading)
-const userArrowIcon = L.divIcon({
-  className: '',
-  html: `<div style="width:38px;height:38px;display:flex;align-items:center;justify-content:center;
-    border-radius:50%;background:rgba(37,99,235,.18);">
-    <svg viewBox="0 0 24 24" width="30" height="30" style="filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))">
-      <path d="M12 2 4 21l8-4.2 8 4.2z" fill="#2563eb" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
-    </svg></div>`,
-  iconSize: [38, 38],
-  iconAnchor: [19, 19],
-  popupAnchor: [0, -20],
-})
-
-// หมุดจุดเริ่ม (A) / ปลายทาง (B) ของเมนูค้นหาเส้นทาง
-function endpointIcon(label: string, color: string): L.DivIcon {
-  return L.divIcon({
-    className: '',
-    html: `<div style="width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};
-      border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;">
-      <span style="transform:rotate(45deg);color:#fff;font:700 13px/1 system-ui,sans-serif;">${label}</span></div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 30],
-    popupAnchor: [0, -30],
-  })
+function fitRoute(m: MLMap | null, coords: LatLng[]) {
+  if (!m || coords.length < 2) return
+  m.fitBounds(routeBounds(coords), { padding: 40, bearing: 0, pitch: 0, duration: 600 })
 }
-const originIcon = endpointIcon('A', '#6610f2')
-const destinationIcon = endpointIcon('B', '#f74780')
 
-// หมุดจุดแวะ: โลโก้ + กรอบน้ำเงิน + เลขลำดับ
-function stopIcon(brand: ProviderBrand | null, n: number): L.DivIcon {
-  const inner = brand
-    ? `<img src="${brand.logo}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:7px;" draggable="false" />`
-    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f74780;color:#fff;border-radius:7px;">⚡</div>`
-  return L.divIcon({
-    className: '',
-    html: `<div style="position:relative;width:40px;height:40px;border-radius:11px;background:#fff;border:3px solid #6610f2;
-      box-shadow:0 2px 10px rgba(102,16,242,.45);padding:1px;">${inner}
-      <span style="position:absolute;top:-9px;right:-9px;min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:#6610f2;
-        color:#fff;font:700 11px/20px system-ui,sans-serif;text-align:center;border:2px solid #fff;">${n}</span></div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -24],
-  })
+function routeGeoJSON(coords: LatLng[]): GeoJSON.Feature<GeoJSON.LineString> {
+  return { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coords.map(([lat, lng]) => [lng, lat]) } }
+}
+
+// หยุดไม่ให้คลิกหมุดไปเป็นการคลิกแผนที่ (เช่น ปิด popup / เลือกจุด)
+function stop(e: MarkerEvent<MouseEvent>) {
+  e.originalEvent.stopPropagation()
 }
 
 function stationKey(s: Station): string {
@@ -128,12 +168,6 @@ function stationKey(s: Station): string {
 
 function stationPos(s: Station): LatLng {
   return [Number(s.Latitude), Number(s.Longitude)]
-}
-
-// แตะแผนที่เพื่อเลือกจุด (ใช้ในเมนูค้นหาเส้นทาง)
-function MapClickHandler({ onClick }: { onClick: (pos: LatLng) => void }) {
-  useMapEvents({ click: (e) => onClick([e.latlng.lat, e.latlng.lng]) })
-  return null
 }
 
 // ตัดสถานีซ้ำ (ข้อมูลมีแถวซ้ำชื่อ+พิกัดเดียวกัน) และพิกัดที่ไม่ถูกต้อง
@@ -167,14 +201,6 @@ function NavIcon() {
       <path d="M12 2 4.5 20.3l.7.7L12 18l6.8 3 .7-.7z" />
     </svg>
   )
-}
-
-function RecenterMap({ lat, lng }: { lat: number; lng: number }) {
-  const map = useMap()
-  useEffect(() => {
-    map.setView([lat, lng], 13, { animate: true })
-  }, [lat, lng, map])
-  return null
 }
 
 type Mode = 'nearby' | 'route'
@@ -252,9 +278,13 @@ export default function Map() {
   const [stations, setStations] = useState<Station[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [map, setMap] = useState<L.Map | null>(null)
+  const [map, setMap] = useState<MLMap | null>(null)
+  const [routeBeforeId, setRouteBeforeId] = useState<string | undefined>(undefined) // วางเส้นทางใต้ป้ายชื่อถนน
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
-  const markerRefs = useRef<Record<string, L.Marker | null>>({})
+  const [popupKey, setPopupKey] = useState<string | null>(null) // หมุดที่เปิด popup อยู่ (ทีละอัน)
+  const closePopup = useCallback(() => setPopupKey(null), [])
+  // ปิดเฉพาะเมื่อยังเป็น popup เดิม (กันกรณีเปิด popup ใหม่แล้วอันเก่าถูกถอดออก)
+  const closePopupIf = useCallback((key: string) => setPopupKey((k) => (k === key ? null : k)), [])
 
   // ── สถานะเมนูค้นหาเส้นทาง ──
   const [origin, setOrigin] = useState<PlanPoint | null>({ name: 'ตำแหน่งของฉัน', pos: null })
@@ -287,7 +317,6 @@ export default function Map() {
   const headingRef = useRef<number | null>(null)
   const headingUpRef = useRef(true)
   const lastHeadingPosRef = useRef<LatLng | null>(null)
-  const userMarkerRef = useRef<L.Marker | null>(null)
   const routeRef = useRef<Route | null>(null)
   const navTargetRef = useRef<NavTarget | null>(null)
   const reachedRef = useRef(0)
@@ -313,11 +342,10 @@ export default function Map() {
   const flyToStation = useCallback(
     (s: Station & { key: string }) => {
       setSelectedKey(s.key)
+      setPopupKey(s.key)
       if (!map) return
-      const marker = markerRefs.current[s.key]
-      map.closePopup()
-      map.flyTo(stationPos(s), Math.max(map.getZoom(), 15), { duration: 0.6 })
-      map.once('moveend', () => marker?.openPopup())
+      const [lat, lng] = stationPos(s)
+      map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 14), duration: 600 })
     },
     [map]
   )
@@ -389,7 +417,7 @@ export default function Map() {
         if (ctrl.signal.aborted) return
         setPlanRoute(r)
         setPlanLoading(false)
-        map?.fitBounds(L.latLngBounds(r.coords), { padding: [40, 40] })
+        fitRoute(map, r.coords)
         fetchAlong(r, km)
       } catch (err) {
         if ((err as Error).name === 'AbortError' || ctrl.signal.aborted) return
@@ -445,20 +473,20 @@ export default function Map() {
       const along = (x: StationAlongRoute) => alongStations.find((a) => a.key === x.key)?.distance_along_route_m ?? x.distance_along_route_m
       const next = [...stops, s].sort((a, b) => along(a) - along(b))
       setStops(next)
-      map?.closePopup()
+      closePopup()
       computePlan(origin, destination, next, bufferKm)
     },
-    [stops, alongStations, origin, destination, bufferKm, computePlan, map]
+    [stops, alongStations, origin, destination, bufferKm, computePlan, closePopup]
   )
 
   const removeStop = useCallback(
     (s: StationAlongRoute) => {
       const next = stops.filter((x) => x.key !== s.key)
       setStops(next)
-      map?.closePopup()
+      closePopup()
       computePlan(origin, destination, next, bufferKm)
     },
-    [stops, origin, destination, bufferKm, computePlan, map]
+    [stops, origin, destination, bufferKm, computePlan, closePopup]
   )
 
   // แตะแผนที่เพื่อเลือกจุดเริ่ม/ปลายทาง
@@ -492,7 +520,7 @@ export default function Map() {
         if (navTargetRef.current !== target) return // ผู้ใช้ยกเลิก/เปลี่ยนปลายทางไปแล้ว
         routeRef.current = r
         setRoute(r)
-        if (fit && map) map.fitBounds(L.latLngBounds(r.coords), { padding: [40, 40] })
+        if (fit) fitRoute(map, r.coords)
       } catch (err) {
         if ((err as Error).name === 'AbortError') return
         setNavError(err instanceof TypeError ? 'เชื่อมต่อบริการคำนวณเส้นทางไม่ได้' : (err as Error).message)
@@ -508,29 +536,35 @@ export default function Map() {
     watchIdRef.current = null
   }, [])
 
-  // หมุนแผนที่: heading-up → ทิศที่รถวิ่งชี้ขึ้นบนจอ, ไม่งั้นทิศเหนืออยู่บน
+  // มุมกล้อง: heading-up → ทิศที่รถวิ่งชี้ขึ้นบนจอ (เอียงเห็นตึก 3D), ไม่งั้นทิศเหนืออยู่บน
+  const cameraAngle = useCallback(() => {
+    const h = headingRef.current
+    const up = navTargetRef.current && followingRef.current && headingUpRef.current && h !== null
+    return up ? { bearing: h, pitch: NAV_PITCH } : { bearing: 0, pitch: 0 }
+  }, [])
+
   const applyBearing = useCallback(() => {
     if (!map) return
-    const h = headingRef.current
-    const target = navTargetRef.current && followingRef.current && headingUpRef.current && h !== null ? -h : 0
-    map.setBearing(target)
-    setMapBearing(target)
-  }, [map])
+    const cam = cameraAngle()
+    map.easeTo({ ...cam, duration: 500 })
+    setMapBearing(-cam.bearing)
+  }, [map, cameraAngle])
 
   // เลื่อนแผนที่ให้รถอยู่ค่อนไปทางล่างของจอ (มองเห็นถนนข้างหน้า)
   const followUser = useCallback(
-    (here: LatLng, animate: boolean) => {
+    (here: LatLng, animate: boolean, zoom?: number) => {
       if (!map) return
-      applyBearing()
-      const size = map.getSize()
-      const userPt = map.latLngToContainerPoint(here)
-      const centerPt = size.divideBy(2)
-      const desired = userPt.subtract(L.point(0, size.y * LOOK_AHEAD_RATIO))
-      const target = map.containerPointToLatLng(desired)
-      if (userPt.distanceTo(centerPt) > size.y || !animate) map.setView(target, map.getZoom(), { animate })
-      else map.panTo(target, { animate, duration: 0.8 })
+      const cam = cameraAngle()
+      setMapBearing(-cam.bearing)
+      map.easeTo({
+        center: [here[1], here[0]],
+        offset: [0, map.getContainer().clientHeight * LOOK_AHEAD_RATIO],
+        ...cam,
+        ...(zoom !== undefined && { zoom }),
+        duration: animate ? 800 : 0,
+      })
     },
-    [map, applyBearing]
+    [map, cameraAngle]
   )
 
   // ทิศของรถ: ใช้ heading จาก GPS เมื่อวิ่งเร็วพอ ไม่งั้นคำนวณจากการเคลื่อนที่ หรือทิศของเส้นทางข้างหน้า
@@ -552,7 +586,6 @@ export default function Map() {
     if (h === null) return
     headingRef.current = h
     setHeading(h)
-    userMarkerRef.current?.setRotation((h * Math.PI) / 180)
   }, [])
 
   // ติดตามตำแหน่งสด: อัปเดตหมุดผู้ใช้, ผ่านจุดแวะ, เลื่อนแผนที่ตาม, คำนวณเส้นทางใหม่เมื่อออกนอกเส้นทาง
@@ -588,7 +621,7 @@ export default function Map() {
 
   const beginNavigation = useCallback(
     (target: NavTarget, stationKeys: string[]) => {
-      map?.closePopup()
+      closePopup()
       setPickField(null)
       setNavTarget(target)
       navTargetRef.current = target
@@ -614,7 +647,7 @@ export default function Map() {
           setNavError(err.message.startsWith('ต้องอนุญาต') ? 'ต้องอนุญาตการเข้าถึงตำแหน่งก่อนจึงจะนำทางได้' : err.message)
         })
     },
-    [map, requestRoute, startWatching]
+    [closePopup, requestRoute, startWatching]
   )
 
   // นำทางตรงไปยังสถานีเดียว (เมนูใกล้ฉัน)
@@ -656,9 +689,9 @@ export default function Map() {
     headingRef.current = null
     lastHeadingPosRef.current = null
     setHeading(null)
-    map?.setBearing(0)
     setMapBearing(0)
-    if (map && mode === 'route' && planRoute) map.fitBounds(L.latLngBounds(planRoute.coords), { padding: [40, 40] })
+    if (mode === 'route' && planRoute) fitRoute(map, planRoute.coords)
+    else map?.easeTo({ bearing: 0, pitch: 0, duration: 500 })
   }, [stopWatching, map, mode, planRoute])
 
   const recenterOnUser = useCallback(() => {
@@ -666,8 +699,7 @@ export default function Map() {
     followingRef.current = true
     if (!userPos || !map) return
     if (headingRef.current === null) updateHeading(userPos)
-    map.setZoom(Math.max(map.getZoom(), NAV_ZOOM), { animate: false })
-    followUser(userPos, false)
+    followUser(userPos, false, Math.max(map.getZoom(), NAV_ZOOM))
   }, [map, userPos, updateHeading, followUser])
 
   // ปุ่มเข็มทิศ: สลับ หมุนตามรถ ↔ ทิศเหนืออยู่บน
@@ -684,6 +716,12 @@ export default function Map() {
       applyBearing()
     }
   }, [userPos, updateHeading, followUser, applyBearing])
+
+  // ได้ตำแหน่งใหม่ในเมนูใกล้ฉัน → เลื่อนแผนที่ไปที่นั่น
+  useEffect(() => {
+    if (!map || (position[0] === DEFAULT_POSITION[0] && position[1] === DEFAULT_POSITION[1])) return
+    map.flyTo({ center: [position[1], position[0]], zoom: 12, duration: 800 })
+  }, [map, position])
 
   // ผู้ใช้ลากแผนที่เอง → หยุดเลื่อนตามตำแหน่ง
   useEffect(() => {
@@ -770,12 +808,12 @@ export default function Map() {
       setMode(m)
       setSelectedKey(null)
       setPickField(null)
-      map?.closePopup()
+      closePopup()
       if (!map) return
-      if (m === 'route' && planRoute) map.fitBounds(L.latLngBounds(planRoute.coords), { padding: [40, 40] })
-      if (m === 'nearby') map.setView(position, 13)
+      if (m === 'route' && planRoute) fitRoute(map, planRoute.coords)
+      if (m === 'nearby') map.flyTo({ center: [position[1], position[0]], zoom: 12, duration: 600 })
     },
-    [mode, map, planRoute, position]
+    [mode, map, planRoute, position, closePopup]
   )
 
   // ════════════════ สิ่งที่แสดงบนแผนที่ ════════════════
@@ -789,10 +827,94 @@ export default function Map() {
     : []
   const shownRoute = navigating ? route : mode === 'route' ? planRoute : null
 
+  const destMarkerPos: LatLng | null =
+    !navigating && mode === 'route' && destinationPos
+      ? destinationPos
+      : navigating && navTarget.stopNames.length === navStationKeys.length
+        ? navTarget.points[navTarget.points.length - 1]
+        : null
+
+  // เนื้อหา popup ของหมุดที่เลือก
+  const popup = ((): { pos: LatLng; offset: number; content: React.ReactNode } | null => {
+    if (!popupKey) return null
+    if (popupKey === 'user') return userPos ? { pos: userPos, offset: 16, content: 'ตำแหน่งของคุณ' } : null
+    if (popupKey === 'origin') {
+      return !navigating && mode === 'route' && originPos
+        ? { pos: originPos, offset: 40, content: <>จุดเริ่มต้น: {origin?.pos === null ? 'ตำแหน่งของฉัน' : origin?.name}</> }
+        : null
+    }
+    if (popupKey === 'destination') {
+      return destMarkerPos
+        ? {
+            pos: destMarkerPos,
+            offset: 40,
+            content: <>ปลายทาง: {navigating ? navTarget.title : destination?.pos === null ? 'ตำแหน่งของฉัน' : destination?.name}</>,
+          }
+        : null
+    }
+    if (navigating) {
+      const s = navStations.find((x) => `nav-${x.key}` === popupKey)
+      return s ? { pos: stationPos(s), offset: 22, content: <StationPopup station={s} brand={getProviderBrand(s)} actions={null} /> } : null
+    }
+    if (mode === 'nearby') {
+      const s = sortedStations.find((x) => x.key === popupKey)
+      if (!s) return null
+      return {
+        pos: stationPos(s),
+        offset: MARKER_SIZE / 2 + 4,
+        content: (
+          <StationPopup
+            station={s}
+            brand={getProviderBrand(s)}
+            extra={<span className="whitespace-nowrap text-[10px] font-semibold text-primary">{formatDistance(s.distanceKm)}</span>}
+            actions={
+              <button
+                onClick={() => startNavigation(s)}
+                className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-semibold py-2 rounded-lg"
+              >
+                <NavIcon /> นำทาง
+              </button>
+            }
+          />
+        ),
+      }
+    }
+    const s = alongStations.find((x) => x.key === popupKey)
+    if (!s) return null
+    const stopNo = stops.findIndex((x) => x.key === s.key) + 1
+    const isStop = stopNo > 0
+    return {
+      pos: stationPos(s),
+      offset: isStop ? 24 : MARKER_SIZE / 2 + 4,
+      content: (
+        <StationPopup
+          station={s}
+          brand={getProviderBrand(s)}
+          extra={
+            <span className="whitespace-nowrap text-[10px] font-semibold text-primary">
+              กม. {(s.distance_along_route_m / 1000).toFixed(1)}
+              {s.distance_from_route_m >= 150 && ` · ห่างทาง ${formatMeters(s.distance_from_route_m)}`}
+            </span>
+          }
+          actions={
+            <button
+              onClick={() => (isStop ? removeStop(s) : addStop(s))}
+              className={`mt-2.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-lg ${
+                isStop ? 'bg-white border border-secondary/30 text-secondary hover:bg-secondary/10' : 'bg-secondary hover:bg-secondary-light text-white'
+              }`}
+            >
+              {isStop ? `เอาออกจากจุดแวะ (จุดที่ ${stopNo})` : '+ เพิ่มเป็นจุดแวะพัก'}
+            </button>
+          }
+        />
+      ),
+    }
+  })()
+
   return (
     <div className="w-full h-full flex flex-col md:flex-row">
       {/* ── แผนที่ ── */}
-      <div className={`relative flex-1 min-h-0 min-w-0 ${pickField ? 'cursor-crosshair [&_.leaflet-container]:!cursor-crosshair' : ''}`}>
+      <div className="relative flex-1 min-h-0 min-w-0">
         {mode === 'nearby' && !navigating && loading && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg text-sm text-primary flex items-center gap-2">
             <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -863,94 +985,66 @@ export default function Map() {
           </button>
         )}
 
-        <MapContainer
-          ref={setMap}
-          center={DEFAULT_POSITION}
-          zoom={12}
-          scrollWheelZoom
-          rotate
-          bearing={0}
-          rotateControl={false}
-          touchRotate={false}
-          shiftKeyRotate={false}
-          compassBearing={false}
-          className="w-full h-full"
+        <MapGL
+          initialViewState={{ longitude: DEFAULT_POSITION[1], latitude: DEFAULT_POSITION[0], zoom: 11 }}
+          mapStyle={MAP_STYLE}
+          style={{ width: '100%', height: '100%' }}
+          dragRotate={false}
+          pitchWithRotate={false}
+          touchPitch={false}
+          cursor={pickField && !navigating ? 'crosshair' : undefined}
+          attributionControl={{ compact: true, customAttribution: 'เส้นทาง © <a href="https://project-osrm.org" target="_blank">OSRM</a>' }}
+          onLoad={(e) => {
+            const m = e.target
+            m.touchZoomRotate.disableRotation()
+            setRouteBeforeId(applyThaiLabels(m))
+            setMap(m)
+          }}
+          onClick={(e) => {
+            if (pickField && !navigating) handleMapClick([e.lngLat.lat, e.lngLat.lng])
+          }}
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · เส้นทาง &copy; <a href="https://project-osrm.org">OSRM</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-
-          <RecenterMap lat={position[0]} lng={position[1]} />
-          {pickField && !navigating && <MapClickHandler onClick={handleMapClick} />}
-
           {shownRoute && (
-            <>
-              <Polyline positions={shownRoute.coords} pathOptions={{ color: '#ffffff', weight: 9, opacity: 0.9 }} />
-              <Polyline positions={shownRoute.coords} pathOptions={{ color: '#6610f2', weight: 5, opacity: 0.9 }} />
-            </>
-          )}
-
-          {userLocated && userPos && (
-            <Marker
-              ref={userMarkerRef}
-              position={userPos}
-              icon={navigating && heading !== null ? userArrowIcon : userDotIcon}
-              rotation={navigating && heading !== null ? (heading * Math.PI) / 180 : 0}
-              rotateWithView
-              zIndexOffset={2000}
-            >
-              <Popup>ตำแหน่งของคุณ</Popup>
-            </Marker>
+            <Source id="route" type="geojson" data={routeGeoJSON(shownRoute.coords)}>
+              <Layer id="route-casing" type="line" beforeId={routeBeforeId}
+                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                paint={{ 'line-color': '#ffffff', 'line-width': 9, 'line-opacity': 0.9 }} />
+              <Layer id="route-line" type="line" beforeId={routeBeforeId}
+                layout={{ 'line-join': 'round', 'line-cap': 'round' }}
+                paint={{ 'line-color': '#6610f2', 'line-width': 5, 'line-opacity': 0.9 }} />
+            </Source>
           )}
 
           {/* ── เมนูใกล้ฉัน ── */}
           {!navigating && mode === 'nearby' &&
             sortedStations.map((station) => {
               const brand = getProviderBrand(station)
+              const [lat, lng] = stationPos(station)
               return (
                 <Marker
                   key={station.key}
-                  ref={(m) => { markerRefs.current[station.key] = m }}
-                  position={stationPos(station)}
-                  icon={getMarkerIcon(brand)}
-                  zIndexOffset={station.key === selectedKey ? 1000 : 0}
-                  eventHandlers={{ click: () => setSelectedKey(station.key) }}
+                  longitude={lng}
+                  latitude={lat}
+                  style={{ zIndex: station.key === selectedKey ? 3 : 1 }}
+                  onClick={(e) => { stop(e); setSelectedKey(station.key); setPopupKey(station.key) }}
                 >
-                  <Popup>
-                    <StationPopup
-                      station={station}
-                      brand={brand}
-                      extra={<span className="whitespace-nowrap text-[10px] font-semibold text-primary">{formatDistance(station.distanceKm)}</span>}
-                      actions={
-                        <button
-                          onClick={() => startNavigation(station)}
-                          className="mt-2.5 w-full inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-semibold py-2 rounded-lg"
-                        >
-                          <NavIcon /> นำทาง
-                        </button>
-                      }
-                    />
-                  </Popup>
+                  <StationPin brand={brand} />
                 </Marker>
               )
             })}
 
           {/* ── เมนูค้นหาเส้นทาง ── */}
           {!navigating && mode === 'route' && originPos && (
-            <Marker position={originPos} icon={originIcon} zIndexOffset={1500}>
-              <Popup>จุดเริ่มต้น: {origin?.pos === null ? 'ตำแหน่งของฉัน' : origin?.name}</Popup>
+            <Marker longitude={originPos[1]} latitude={originPos[0]} anchor="bottom" style={{ zIndex: 5 }}
+              onClick={(e) => { stop(e); setPopupKey('origin') }}>
+              <EndpointPin label="A" color="#6610f2" />
             </Marker>
           )}
           {/* ปลายทาง (B): ตอนวางแผน หรือระหว่างนำทางตามแผน (ปลายทางไม่ใช่สถานี) */}
-          {((!navigating && mode === 'route' && destinationPos) ||
-            (navigating && navTarget.stopNames.length === navStationKeys.length)) && (
-            <Marker
-              position={navigating ? navTarget.points[navTarget.points.length - 1] : destinationPos!}
-              icon={destinationIcon}
-              zIndexOffset={1500}
-            >
-              <Popup>ปลายทาง: {navigating ? navTarget.title : destination?.pos === null ? 'ตำแหน่งของฉัน' : destination?.name}</Popup>
+          {destMarkerPos && (
+            <Marker longitude={destMarkerPos[1]} latitude={destMarkerPos[0]} anchor="bottom" style={{ zIndex: 5 }}
+              onClick={(e) => { stop(e); setPopupKey('destination') }}>
+              <EndpointPin label="B" color="#f74780" />
             </Marker>
           )}
 
@@ -958,38 +1052,16 @@ export default function Map() {
             alongStations.map((station) => {
               const brand = getProviderBrand(station)
               const stopNo = stops.findIndex((s) => s.key === station.key) + 1
-              const isStop = stopNo > 0
+              const [lat, lng] = stationPos(station)
               return (
                 <Marker
                   key={station.key}
-                  ref={(m) => { markerRefs.current[station.key] = m }}
-                  position={stationPos(station)}
-                  icon={isStop ? stopIcon(brand, stopNo) : getMarkerIcon(brand)}
-                  zIndexOffset={isStop ? 1200 : station.key === selectedKey ? 1000 : 0}
-                  eventHandlers={{ click: () => setSelectedKey(station.key) }}
+                  longitude={lng}
+                  latitude={lat}
+                  style={{ zIndex: stopNo > 0 ? 4 : station.key === selectedKey ? 3 : 1 }}
+                  onClick={(e) => { stop(e); setSelectedKey(station.key); setPopupKey(station.key) }}
                 >
-                  <Popup>
-                    <StationPopup
-                      station={station}
-                      brand={brand}
-                      extra={
-                        <span className="whitespace-nowrap text-[10px] font-semibold text-primary">
-                          กม. {(station.distance_along_route_m / 1000).toFixed(1)}
-                          {station.distance_from_route_m >= 150 && ` · ห่างทาง ${formatMeters(station.distance_from_route_m)}`}
-                        </span>
-                      }
-                      actions={
-                        <button
-                          onClick={() => (isStop ? removeStop(station) : addStop(station))}
-                          className={`mt-2.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-lg ${
-                            isStop ? 'bg-white border border-secondary/30 text-secondary hover:bg-secondary/10' : 'bg-secondary hover:bg-secondary-light text-white'
-                          }`}
-                        >
-                          {isStop ? `เอาออกจากจุดแวะ (จุดที่ ${stopNo})` : '+ เพิ่มเป็นจุดแวะพัก'}
-                        </button>
-                      }
-                    />
-                  </Popup>
+                  {stopNo > 0 ? <StopPin brand={brand} n={stopNo} /> : <StationPin brand={brand} />}
                 </Marker>
               )
             })}
@@ -998,8 +1070,10 @@ export default function Map() {
           {!navigating && mode === 'route' &&
             stops
               .filter((s) => !alongStations.some((a) => a.key === s.key))
-              .map((s) => (
-                <Marker key={`stop-${s.key}`} position={stationPos(s)} icon={stopIcon(getProviderBrand(s), stops.indexOf(s) + 1)} zIndexOffset={1200} />
+              .map((s, i) => (
+                <Marker key={`stop-${s.key}`} longitude={stationPos(s)[1]} latitude={stationPos(s)[0]} style={{ zIndex: 4 }}>
+                  <StopPin brand={getProviderBrand(s)} n={stops.indexOf(s) + 1 || i + 1} />
+                </Marker>
               ))}
 
           {/* ── ระหว่างนำทาง: สถานีปลายทาง/จุดแวะ ── */}
@@ -1007,20 +1081,42 @@ export default function Map() {
             navStations.map((station) => {
               const brand = getProviderBrand(station)
               const stopNo = navTarget.stopNames.length > 0 ? navStationKeys.indexOf(station.key) + 1 : 0
+              const [lat, lng] = stationPos(station)
               return (
-                <Marker
-                  key={`nav-${station.key}`}
-                  position={stationPos(station)}
-                  icon={stopNo > 0 ? stopIcon(brand, stopNo) : getMarkerIcon(brand)}
-                  zIndexOffset={1200}
-                >
-                  <Popup>
-                    <StationPopup station={station} brand={brand} actions={null} />
-                  </Popup>
+                <Marker key={`nav-${station.key}`} longitude={lng} latitude={lat} style={{ zIndex: 4 }}
+                  onClick={(e) => { stop(e); setPopupKey(`nav-${station.key}`) }}>
+                  {stopNo > 0 ? <StopPin brand={brand} n={stopNo} /> : <StationPin brand={brand} />}
                 </Marker>
               )
             })}
-        </MapContainer>
+
+          {userLocated && userPos && (
+            <Marker
+              longitude={userPos[1]}
+              latitude={userPos[0]}
+              rotation={navigating && heading !== null ? heading : 0}
+              rotationAlignment="map"
+              style={{ zIndex: 10 }}
+              onClick={(e) => { stop(e); setPopupKey('user') }}
+            >
+              {navigating && heading !== null ? <UserArrow /> : <UserDot />}
+            </Marker>
+          )}
+
+          {/* ── popup (ทีละอัน) ── */}
+          {popup && (
+            <Popup
+              key={popupKey}
+              longitude={popup.pos[1]}
+              latitude={popup.pos[0]}
+              offset={popup.offset}
+              maxWidth="290px"
+              onClose={() => closePopupIf(popupKey!)}
+            >
+              {popup.content}
+            </Popup>
+          )}
+        </MapGL>
       </div>
 
       {/* ── แผงขวามือ ── */}
@@ -1042,7 +1138,7 @@ export default function Map() {
             onStepClick={(loc) => {
               setFollowing(false)
               followingRef.current = false
-              map?.flyTo(loc, 17, { duration: 0.5 })
+              map?.flyTo({ center: [loc[1], loc[0]], zoom: 16, duration: 500 })
             }}
           />
         ) : (
