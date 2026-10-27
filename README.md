@@ -64,7 +64,8 @@ npm run dev                   # http://localhost:3000
 3. **Environment Variables**
    - `API_URL` = `https://<api>.vercel.app` (ไม่มี `/` ท้าย)
    - (ไม่บังคับ) `NEXT_PUBLIC_ROUTING_URL` = เซิร์ฟเวอร์ OSRM ของคุณเอง
-   - (ไม่บังคับ) `NEXT_PUBLIC_GEOCODER_URL` = เซิร์ฟเวอร์ Photon ของคุณเอง
+   - (ไม่บังคับ) `NEXT_PUBLIC_GEOCODER_URL` = เซิร์ฟเวอร์ Photon ของคุณเอง (ค้นหาแบบเร็ว)
+   - (ไม่บังคับ) `NEXT_PUBLIC_NOMINATIM_URL` = เซิร์ฟเวอร์ Nominatim ของคุณเอง (ค้นหาแบบละเอียด)
    - (ไม่บังคับ) `NEXT_PUBLIC_MAP_STYLE` = สไตล์แผนที่ (ค่าเริ่มต้น `https://tiles.openfreemap.org/styles/liberty` — เปลี่ยนเป็น `.../positron` หรือ `.../bright` ได้)
 4. Deploy
 

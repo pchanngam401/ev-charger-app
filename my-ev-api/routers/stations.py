@@ -1,3 +1,6 @@
+import math
+import re
+
 from fastapi import APIRouter, HTTPException, Query
 from database import supabase
 from models import AlongRouteRequest, CheckInRequest
@@ -30,6 +33,71 @@ def get_nearby_stations(
         return {"count": len(response.data), "data": response.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+SEARCH_COLUMNS = ("Name", "Name_EN", "Address", "Provider", "Operator")
+NAME_COLUMNS = ("Name", "Name_EN")
+
+
+def _distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp, dl = p2 - p1, math.radians(lng2 - lng1)
+    h = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(h))
+
+
+@router.get("/search")
+def search_stations(
+    q: str = Query(..., min_length=1, max_length=80, description="ชื่อสถานี / ผู้ให้บริการ / ที่อยู่"),
+    lat: float | None = Query(None, ge=-90, le=90),
+    lng: float | None = Query(None, ge=-180, le=180),
+    limit: int = Query(8, ge=1, le=30),
+):
+    """ค้นหาสถานีจากชื่อ (ไทย/อังกฤษ) ผู้ให้บริการ หรือที่อยู่ — ชื่อสถานีที่ตรงขึ้นก่อน แต่ละกลุ่มเรียงจากใกล้ตำแหน่งผู้ใช้"""
+    # ตัดอักขระที่มีความหมายพิเศษใน filter ของ PostgREST
+    term = re.sub(r"\s+", " ", re.sub(r'[,()"*%\\]', " ", q)).strip()
+    if len(term) < 2:
+        return {"count": 0, "data": []}
+    flt = ",".join(f"{c}.ilike.*{term}*" for c in SEARCH_COLUMNS)
+    has_pos = lat is not None and lng is not None
+
+    def fetch(box: float | None) -> list[dict]:
+        query = supabase.table("stations").select("*").or_(flt)
+        if box is not None and has_pos:
+            query = query.gte("Latitude", lat - box).lte("Latitude", lat + box).gte("Longitude", lng - box).lte("Longitude", lng + box)
+        return query.limit(500).execute().data
+
+    try:
+        rows = fetch(0.5) if has_pos else []  # ~55 กม. รอบผู้ใช้ก่อน
+        if len(rows) < limit:
+            rows += fetch(None)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    needle = term.casefold()
+    seen: set[str] = set()
+    out: list[dict] = []
+    for row in rows:
+        try:
+            s_lat, s_lng = float(row["Latitude"]), float(row["Longitude"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        key = f"{row.get('Name')}|{s_lat:.6f}|{s_lng:.6f}"
+        if key in seen:
+            continue
+        seen.add(key)
+        row.pop("location", None)
+        names = [str(row.get(c) or "").casefold() for c in NAME_COLUMNS]
+        row["match"] = "name" if any(needle in n for n in names) else "other"
+        row["distance_m"] = round(_distance_m(lat, lng, s_lat, s_lng)) if has_pos else None
+        row["_rank"] = (0 if row["match"] == "name" else 1, row["distance_m"] or 0)
+        out.append(row)
+    out.sort(key=lambda r: r["_rank"])
+    data = out[:limit]
+    for r in data:
+        r.pop("_rank", None)
+    return {"count": len(data), "data": data}
 
 
 @router.post("/along-route")
