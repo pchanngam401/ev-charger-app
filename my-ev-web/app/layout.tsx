@@ -1,11 +1,12 @@
 import type { Metadata, Viewport } from 'next'
-// ฟอนต์ตาม template (Barlow หัวข้อ / Ubuntu เนื้อหา) + ฟอนต์ไทยที่เข้ากัน (Kanit / Sarabun)
-import '@fontsource/barlow/600.css'
-import '@fontsource/barlow/700.css'
-import '@fontsource/ubuntu/400.css'
-import '@fontsource/ubuntu/500.css'
-import '@fontsource/kanit/500.css'
-import '@fontsource/kanit/600.css'
+// ฟอนต์ตาม template (Plus Jakarta Sans หัวข้อ / Rubik เนื้อหา) + ฟอนต์ไทยที่เข้ากัน (Prompt / Sarabun)
+import '@fontsource/plus-jakarta-sans/500.css'
+import '@fontsource/plus-jakarta-sans/600.css'
+import '@fontsource/plus-jakarta-sans/700.css'
+import '@fontsource/rubik/400.css'
+import '@fontsource/rubik/500.css'
+import '@fontsource/prompt/500.css'
+import '@fontsource/prompt/600.css'
 import '@fontsource/sarabun/400.css'
 import '@fontsource/sarabun/500.css'
 import './globals.css'
@@ -19,7 +20,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#d81324',
+  themeColor: '#f74780',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

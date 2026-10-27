@@ -1,20 +1,21 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
-/* ธีมตาม template SEOcom (HTML Codex)
-   ฟอนต์ Barlow/Ubuntu ไม่มีตัวอักษรไทย จึงจับคู่ Kanit (หัวข้อ) และ Sarabun (เนื้อหา) เป็น fallback */
+/* ธีมตาม template Mailler - SaaS Website Template (HTML Codex)
+   ฟอนต์ Plus Jakarta Sans / Rubik ไม่มีตัวอักษรไทย จึงจับคู่ Prompt (หัวข้อ) และ Sarabun (เนื้อหา) เป็น fallback */
 @theme {
-  --color-primary: #d81324;
-  --color-primary-dark: #b30f1e;
-  --color-secondary: #0b2154;
-  --color-secondary-light: #1b3270;
-  --color-light: #f2f2f2;
-  --color-body: #596277;
+  --color-primary: #f74780;
+  --color-primary-dark: #e2336c;
+  --color-secondary: #6610f2;
+  --color-secondary-light: #7a2ff4;
+  --color-light: #f6f6fa;
+  --color-dark: #353f4f;
+  --color-body: #757575;
 
-  --font-sans: "Ubuntu", "Sarabun", system-ui, sans-serif;
-  --font-heading: "Barlow", "Kanit", system-ui, sans-serif;
+  --font-sans: "Rubik", "Sarabun", system-ui, sans-serif;
+  --font-heading: "Plus Jakarta Sans", "Prompt", system-ui, sans-serif;
 
-  --radius-template: 3px;
+  --radius-template: 10px;
 }
 
 @layer base {
@@ -34,134 +35,170 @@
   h5,
   h6 {
     font-family: var(--font-heading);
-    font-weight: 700;
-    color: var(--color-secondary);
+    font-weight: 500;
+    color: var(--color-dark);
     line-height: 1.25;
   }
 }
 
 @layer components {
-  /* ปุ่มแบบ template: มุมโค้ง 3px, เปลี่ยนสีนุ่มนวล */
+  /* ปุ่มทรงแคปซูลแบบ template */
   .btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-radius: var(--radius-template);
-    font-weight: 500;
-    transition: background-color 0.3s, color 0.3s, border-color 0.3s, box-shadow 0.3s;
+    border-radius: 9999px;
+    font-weight: 400;
+    border: 1px solid transparent;
+    transition: background-color 0.5s, color 0.5s, border-color 0.5s, box-shadow 0.5s;
   }
   .btn-primary {
     background: var(--color-primary);
+    border-color: var(--color-primary);
     color: #fff;
   }
   .btn-primary:hover {
-    background: var(--color-primary-dark);
-  }
-  .btn-secondary {
-    background: var(--color-secondary);
-    color: #fff;
-  }
-  .btn-secondary:hover {
-    background: var(--color-secondary-light);
-  }
-  .btn-outline-light {
-    border: 2px solid rgba(255, 255, 255, 0.85);
-    color: #fff;
-  }
-  .btn-outline-light:hover {
     background: #fff;
     color: var(--color-primary);
   }
-
-  /* คำไฮไลต์ในหัวข้อ เช่น  [ฟีเจอร์] ทำอะไรได้บ้าง */
-  .highlight {
-    display: inline-block;
+  .btn-light {
+    background: var(--color-light);
+    color: var(--color-primary);
+  }
+  .btn-light:hover {
+    background: var(--color-primary);
+    color: var(--color-light);
+  }
+  .btn-outline {
+    background: var(--color-light);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+  .btn-outline:hover {
     background: var(--color-primary);
     color: #fff;
-    border-radius: var(--radius-template);
-    padding: 0 0.4em;
-    text-transform: uppercase;
   }
 
-  /* ส่วนหัวพื้นแดงพร้อมลวดลายเคลื่อนไหว */
-  .hero-header {
+  /* หัวข้อย่อยสีชมพูเหนือหัวข้อใหญ่ เช่น "บริการของเรา" */
+  .eyebrow {
+    font-family: var(--font-heading);
+    font-weight: 500;
+    color: var(--color-primary);
+    font-size: 1.25rem;
+    margin-bottom: 0.25rem;
+  }
+
+  /* ส่วนหัว: ก้อนสีม่วงอ่อนด้านขวา + วงแหวนเคลื่อนไหว */
+  .header {
     position: relative;
     overflow: hidden;
-    background: var(--color-primary);
     isolation: isolate;
   }
-  .hero-header::before {
+  .header::after {
     content: "";
     position: absolute;
-    inset: -20px;
-    background: url(/img/hero-header-bg.png) center / cover no-repeat;
-    opacity: 0.22;
-    mix-blend-mode: screen;
-    animation: animateUpDown 8s ease infinite;
+    top: 0;
+    right: 0;
+    width: 60%;
+    height: 100%;
+    background: var(--color-light);
+    border-radius: 22% 78% 33% 67% / 32% 0% 100% 68%;
+    animation: bgMove 5s linear infinite;
+    z-index: -1;
+  }
+  .header::before {
+    content: "";
+    position: absolute;
+    bottom: -9%;
+    left: -7%;
+    width: 400px;
+    height: 400px;
+    border-radius: 200px;
+    border: 30px solid rgba(247, 71, 128, 0.05);
+    animation: ringSpin 5s linear infinite;
+    z-index: -1;
+  }
+  .ring-float {
+    position: absolute;
+    border-radius: 9999px;
+    background: transparent;
+    pointer-events: none;
     z-index: -1;
   }
 
-  /* การ์ดบริการ: มุมซ้ายบนโค้งใหญ่ */
+  /* การ์ดบริการ: เงานุ่ม, hover เป็นสีม่วงอ่อน */
   .service-item {
-    position: relative;
-    overflow: hidden;
     background: #fff;
-    box-shadow: 0 0 45px rgba(0, 0, 0, 0.07);
-    border-radius: 45px 3px 3px 3px;
-    transition: transform 0.5s;
+    border-radius: var(--radius-template);
+    box-shadow: 0 0 45px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.5s;
+  }
+  .service-item .service-icon,
+  .service-item .btn {
+    transition: background-color 0.5s, color 0.5s;
   }
   .service-item:hover {
-    transform: translateY(-10px);
+    background: rgba(102, 16, 242, 0.09);
   }
-  .service-icon {
-    width: 90px;
-    height: 90px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .service-item:hover .service-icon,
+  .service-item:hover .btn-light {
+    background: #fff;
+  }
+  .service-item:hover .btn-light:hover {
     background: var(--color-primary);
     color: #fff;
-    border-radius: 0 0 45px 0;
   }
 
-  /* ลิงก์ footer แบบ template */
-  .footer-link {
-    display: block;
-    margin-bottom: 10px;
-    color: rgba(255, 255, 255, 0.55);
-    transition: color 0.3s, letter-spacing 0.3s;
+  /* กรอบรูปทรงอิสระ (feature-img ของ template) */
+  .feature-blob {
+    background: var(--color-light);
+    border-radius: 58% 42% 21% 79% / 30% 29% 71% 70%;
   }
-  .footer-link::before {
-    content: "›";
-    margin-right: 10px;
+
+  /* footer พื้นม่วงจาง */
+  .footer {
+    background: linear-gradient(rgba(102, 16, 242, 0.05), rgba(102, 16, 242, 0.05));
+  }
+  .footer-link {
+    line-height: 35px;
+    color: var(--color-dark);
+    transition: color 0.5s, letter-spacing 0.5s;
   }
   .footer-link:hover {
-    color: #fff;
-    letter-spacing: 0.5px;
+    letter-spacing: 2px;
+    color: var(--color-primary);
   }
 }
 
-@keyframes animateUpDown {
-  0% { transform: translate(0, 0); }
-  25% { transform: translate(15px, -15px); }
-  50% { transform: translate(30px, 0); }
-  75% { transform: translate(15px, 15px); }
-  100% { transform: translate(0, 0); }
+/* ส่วนหัวเลื่อนไปมาเบาๆ */
+@keyframes bgMove {
+  0% { right: 0; }
+  50% { right: 20px; }
+  100% { right: 0; }
 }
-
+@keyframes ringSpin {
+  0% { transform: rotate(0deg) translate3d(0, 1%, 0) rotate(0deg); }
+  100% { transform: rotate(360deg) translate3d(0, 1%, 0) rotate(-360deg); }
+}
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(40px, -20px); }
+}
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-10px); }
 }
+@keyframes moveLeft {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(40px); }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .hero-header::before,
-  [class*="animate-[float"] {
+  .header::after,
+  .header::before,
+  [class*="animate-["] {
     animation: none !important;
-  }
-  .service-item:hover {
-    transform: none;
   }
 }
 

@@ -72,7 +72,7 @@ export default function NavigationPanel({
             กำลังนำทางไป
             {target.stopNames.length > 0 && ` · แวะ ${target.stopNames.length} จุด`}
           </p>
-          <h2 className="text-sm font-bold text-secondary truncate">{target.title}</h2>
+          <h2 className="text-sm font-bold text-dark truncate">{target.title}</h2>
         </div>
         <button
           onClick={onCancel}
@@ -135,7 +135,7 @@ export default function NavigationPanel({
                     onClick={() => onStepClick(step.location)}
                     className={`w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 ${current ? 'bg-primary/5' : ''} ${done ? 'opacity-45' : ''}`}
                   >
-                    <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm ${current ? 'bg-primary text-white' : 'bg-light text-secondary'}`}>
+                    <span className={`w-7 h-7 shrink-0 rounded-full flex items-center justify-center text-sm ${current ? 'bg-primary text-white' : 'bg-light text-dark'}`}>
                       {step.icon}
                     </span>
                     <span className="flex-1 min-w-0 text-[13px] text-gray-800 leading-snug">{step.text}</span>

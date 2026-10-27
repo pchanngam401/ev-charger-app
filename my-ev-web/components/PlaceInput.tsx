@@ -101,7 +101,7 @@ export default function PlaceInput({
             if (e.key === 'Escape') setEditing(false)
           }}
           placeholder={picking ? 'แตะบนแผนที่เพื่อเลือกจุด...' : placeholder}
-          className="flex-1 min-w-0 bg-transparent text-sm text-secondary placeholder:text-gray-400 outline-none"
+          className="flex-1 min-w-0 bg-transparent text-sm text-dark placeholder:text-gray-400 outline-none"
           aria-label={label}
         />
         {value && !editing && (
@@ -122,7 +122,7 @@ export default function PlaceInput({
             <button
               type="button"
               onClick={() => choose({ name: 'ตำแหน่งของฉัน', pos: null })}
-              className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 flex items-center gap-2 text-blue-700 font-medium"
+              className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 flex items-center gap-2 text-secondary font-medium"
             >
               📍 ตำแหน่งของฉัน
             </button>
@@ -151,7 +151,7 @@ export default function PlaceInput({
                     onClick={() => choose({ name: r.name, pos: r.pos })}
                     className="w-full text-left px-3 py-2 hover:bg-primary/5"
                   >
-                    <span className="block text-sm text-secondary truncate">{r.name}</span>
+                    <span className="block text-sm text-dark truncate">{r.name}</span>
                     {r.detail && <span className="block text-[11px] text-gray-500 truncate">{r.detail}</span>}
                   </button>
                 </li>

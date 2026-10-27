@@ -34,7 +34,7 @@ export default function StationList({ stations, selectedKey, onSelect, onNavigat
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="px-4 py-3 border-b border-gray-100 shrink-0">
-        <h2 className="font-bold text-secondary text-sm">
+        <h2 className="font-bold text-dark text-sm">
           พบ {stations.length} สถานี
           <span className="font-normal text-gray-500"> · รัศมี {radiusKm} กม.</span>
         </h2>
@@ -77,7 +77,7 @@ export default function StationList({ stations, selectedKey, onSelect, onNavigat
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className={`text-sm font-semibold leading-snug line-clamp-2 ${selected ? 'text-primary' : 'text-secondary'}`}>
+                      <h3 className={`text-sm font-semibold leading-snug line-clamp-2 ${selected ? 'text-primary' : 'text-dark'}`}>
                         {s.Name}
                       </h3>
                       <span className="shrink-0 text-xs font-semibold text-primary tabular-nums mt-0.5">
@@ -102,7 +102,7 @@ export default function StationList({ stations, selectedKey, onSelect, onNavigat
                 {/* ปุ่มนำทาง (แยกจากปุ่มเลือกรายการ) */}
                 <button
                   onClick={() => onNavigate(s)}
-                  className="absolute left-[68px] bottom-3 inline-flex items-center gap-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-semibold pl-2.5 pr-3 py-1.5 rounded-[3px] shadow-sm transition-colors"
+                  className="absolute left-[68px] bottom-3 inline-flex items-center gap-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-semibold pl-2.5 pr-3 py-1.5 rounded-full shadow-sm transition-colors"
                   aria-label={`นำทางไป ${s.Name}`}
                 >
                   <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="currentColor" aria-hidden="true">

@@ -38,7 +38,7 @@ const MARKER_SIZE = 34
 const defaultIcon = L.divIcon({
   className: '',
   html: `<div style="
-    width:30px;height:30px;background:#d81324;border:3px solid #fff;border-radius:50%;
+    width:30px;height:30px;background:#f74780;border:3px solid #fff;border-radius:50%;
     box-shadow:0 2px 8px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;
     font-size:15px;line-height:1;">⚡</div>`,
   iconSize: [30, 30],
@@ -102,19 +102,19 @@ function endpointIcon(label: string, color: string): L.DivIcon {
     popupAnchor: [0, -30],
   })
 }
-const originIcon = endpointIcon('A', '#0b2154')
-const destinationIcon = endpointIcon('B', '#dc2626')
+const originIcon = endpointIcon('A', '#6610f2')
+const destinationIcon = endpointIcon('B', '#f74780')
 
 // หมุดจุดแวะ: โลโก้ + กรอบน้ำเงิน + เลขลำดับ
 function stopIcon(brand: ProviderBrand | null, n: number): L.DivIcon {
   const inner = brand
     ? `<img src="${brand.logo}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:7px;" draggable="false" />`
-    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#d81324;color:#fff;border-radius:7px;">⚡</div>`
+    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#f74780;color:#fff;border-radius:7px;">⚡</div>`
   return L.divIcon({
     className: '',
-    html: `<div style="position:relative;width:40px;height:40px;border-radius:11px;background:#fff;border:3px solid #2563eb;
-      box-shadow:0 2px 10px rgba(37,99,235,.5);padding:1px;">${inner}
-      <span style="position:absolute;top:-9px;right:-9px;min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:#2563eb;
+    html: `<div style="position:relative;width:40px;height:40px;border-radius:11px;background:#fff;border:3px solid #6610f2;
+      box-shadow:0 2px 10px rgba(102,16,242,.45);padding:1px;">${inner}
+      <span style="position:absolute;top:-9px;right:-9px;min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:#6610f2;
         color:#fff;font:700 11px/20px system-ui,sans-serif;text-align:center;border:2px solid #fff;">${n}</span></div>`,
     iconSize: [40, 40],
     iconAnchor: [20, 20],
@@ -228,7 +228,7 @@ function StationPopup({ station, brand, extra, actions }: {
           </span>
         )}
       </div>
-      <h3 className="font-bold text-sm text-secondary">{station.Name}</h3>
+      <h3 className="font-bold text-sm text-dark">{station.Name}</h3>
       {station.Address && <p className="text-xs text-gray-500 mt-1 leading-relaxed">{station.Address}</p>}
       {station.description && (
         <div className="mt-2 pt-2 border-t border-gray-100">
@@ -814,7 +814,7 @@ export default function Map() {
         )}
 
         {pickField && !navigating && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-blue-600 text-white px-4 py-2 rounded-full shadow-lg text-sm flex items-center gap-2">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-secondary text-white px-4 py-2 rounded-full shadow-lg text-sm flex items-center gap-2">
             🗺️ แตะแผนที่เพื่อเลือก{pickField === 'origin' ? 'จุดเริ่มต้น' : 'ปลายทาง'}
             <button onClick={() => setPickField(null)} className="ml-1 font-semibold underline">ยกเลิก</button>
           </div>
@@ -887,7 +887,7 @@ export default function Map() {
           {shownRoute && (
             <>
               <Polyline positions={shownRoute.coords} pathOptions={{ color: '#ffffff', weight: 9, opacity: 0.9 }} />
-              <Polyline positions={shownRoute.coords} pathOptions={{ color: '#2563eb', weight: 5, opacity: 0.95 }} />
+              <Polyline positions={shownRoute.coords} pathOptions={{ color: '#6610f2', weight: 5, opacity: 0.9 }} />
             </>
           )}
 
@@ -982,7 +982,7 @@ export default function Map() {
                         <button
                           onClick={() => (isStop ? removeStop(station) : addStop(station))}
                           className={`mt-2.5 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold py-2 rounded-lg ${
-                            isStop ? 'bg-white border border-blue-200 text-blue-700 hover:bg-blue-50' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                            isStop ? 'bg-white border border-secondary/30 text-secondary hover:bg-secondary/10' : 'bg-secondary hover:bg-secondary-light text-white'
                           }`}
                         >
                           {isStop ? `เอาออกจากจุดแวะ (จุดที่ ${stopNo})` : '+ เพิ่มเป็นจุดแวะพัก'}
@@ -1048,7 +1048,7 @@ export default function Map() {
         ) : (
           <>
             {/* เมนู */}
-            <div role="tablist" aria-label="เมนู" className="shrink-0 grid grid-cols-2 gap-1 p-1 m-2 mb-0 bg-light rounded-[3px]">
+            <div role="tablist" aria-label="เมนู" className="shrink-0 grid grid-cols-2 gap-1 p-1 m-3 mb-1 bg-light rounded-full">
               {([
                 ['nearby', '📍 ใกล้ฉัน'],
                 ['route', '🧭 ค้นหาเส้นทาง'],
@@ -1058,8 +1058,8 @@ export default function Map() {
                   role="tab"
                   aria-selected={mode === m}
                   onClick={() => switchMode(m)}
-                  className={`py-2 rounded-[3px] font-heading text-[15px] font-semibold transition-colors ${
-                    mode === m ? 'bg-primary text-white shadow-sm' : 'text-secondary hover:bg-white'
+                  className={`py-2 rounded-full font-heading text-[15px] font-medium transition-colors duration-500 ${
+                    mode === m ? 'bg-primary text-white shadow-sm' : 'text-dark hover:text-primary'
                   }`}
                 >
                   {label}

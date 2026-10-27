@@ -99,7 +99,7 @@ export default function RoutePlanner(props: Props) {
           </button>
         </div>
         {pickField && (
-          <p className="text-xs text-blue-700 bg-blue-50 rounded-md px-2.5 py-1.5">
+          <p className="text-xs text-secondary bg-secondary/5 rounded-md px-2.5 py-1.5">
             🗺️ แตะบนแผนที่เพื่อเลือก{pickField === 'origin' ? 'จุดเริ่มต้น' : 'ปลายทาง'}
           </p>
         )}
@@ -126,7 +126,7 @@ export default function RoutePlanner(props: Props) {
           <div className="px-4 py-3 border-b border-gray-100">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xl font-bold text-secondary tabular-nums">{formatDuration(route.duration)}</p>
+                <p className="text-xl font-bold text-dark tabular-nums">{formatDuration(route.duration)}</p>
                 <p className="text-xs text-gray-500 tabular-nums">
                   {formatMeters(route.distance)}
                   {stops.length > 0 && ` · แวะ ${stops.length} จุด`}
@@ -135,7 +135,7 @@ export default function RoutePlanner(props: Props) {
               <button
                 type="button"
                 onClick={onStart}
-                className="inline-flex items-center gap-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-4 py-2 rounded-[3px] shadow-sm"
+                className="inline-flex items-center gap-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-4 py-2 rounded-full shadow-sm"
               >
                 <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor" aria-hidden="true">
                   <path d="M12 2 4.5 20.3l.7.7L12 18l6.8 3 .7-.7z" />
@@ -150,8 +150,8 @@ export default function RoutePlanner(props: Props) {
                 {stops.map((s, i) => {
                   const brand = getProviderBrand(s)
                   return (
-                    <li key={s.key} className="flex items-center gap-2 bg-blue-50 rounded-lg pl-1.5 pr-2 py-1.5">
-                      <span className="w-5 h-5 shrink-0 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+                    <li key={s.key} className="flex items-center gap-2 bg-secondary/5 rounded-lg pl-1.5 pr-2 py-1.5">
+                      <span className="w-5 h-5 shrink-0 rounded-full bg-secondary text-white text-[10px] font-bold flex items-center justify-center">
                         {i + 1}
                       </span>
                       {brand && (
@@ -178,7 +178,7 @@ export default function RoutePlanner(props: Props) {
 
           {/* ── สถานีระหว่างทาง ── */}
           <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between gap-2 bg-gray-50/60">
-            <h2 className="text-sm font-bold text-secondary">
+            <h2 className="text-sm font-bold text-dark">
               สถานีระหว่างทาง
               {!stationsLoading && <span className="font-normal text-gray-500"> · {stations.length} แห่ง</span>}
             </h2>
@@ -217,7 +217,7 @@ export default function RoutePlanner(props: Props) {
                   <li
                     key={s.key}
                     ref={(el) => { itemRefs.current[s.key] = el }}
-                    className={`flex gap-3 px-4 py-3 ${selected ? 'bg-primary/5' : isStop ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}
+                    className={`flex gap-3 px-4 py-3 ${selected ? 'bg-primary/5' : isStop ? 'bg-secondary/5' : 'hover:bg-gray-50'}`}
                   >
                     <button type="button" onClick={() => onSelectStation(s)} className="shrink-0 self-start" aria-label={`ดู ${s.Name} บนแผนที่`}>
                       {brand ? (
@@ -230,7 +230,7 @@ export default function RoutePlanner(props: Props) {
                     <div className="min-w-0 flex-1">
                       <button type="button" onClick={() => onSelectStation(s)} className="block w-full text-left">
                         <div className="flex items-start justify-between gap-2">
-                          <h3 className={`text-sm font-semibold leading-snug line-clamp-2 ${selected ? 'text-primary' : 'text-secondary'}`}>{s.Name}</h3>
+                          <h3 className={`text-sm font-semibold leading-snug line-clamp-2 ${selected ? 'text-primary' : 'text-dark'}`}>{s.Name}</h3>
                           <span className="shrink-0 text-xs font-semibold text-primary tabular-nums mt-0.5" title="ระยะจากจุดเริ่มตามเส้นทาง">
                             กม. {(s.distance_along_route_m / 1000).toFixed(1)}
                           </span>
@@ -251,8 +251,8 @@ export default function RoutePlanner(props: Props) {
                           onClick={() => (isStop ? onRemoveStop(s) : onAddStop(s))}
                           className={`ml-auto inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${
                             isStop
-                              ? 'bg-blue-600 border-blue-600 text-white hover:bg-blue-700'
-                              : 'bg-white border-blue-200 text-blue-700 hover:bg-blue-50'
+                              ? 'bg-secondary border-secondary text-white hover:bg-secondary-light'
+                              : 'bg-white border-secondary/30 text-secondary hover:bg-secondary/10'
                           }`}
                           aria-label={isStop ? `เอา ${s.Name} ออกจากจุดแวะ` : `เพิ่ม ${s.Name} เป็นจุดแวะ`}
                         >

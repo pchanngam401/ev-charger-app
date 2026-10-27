@@ -26,7 +26,7 @@
 | `/map` | แผนที่ — เมนูใกล้ฉัน |
 | `/map?mode=route` | แผนที่ — เมนูค้นหาเส้นทาง |
 
-ดีไซน์อิงจาก template [SEOcom](https://htmlcodex.com/seo-company-website-template) โดย HTML Codex (CC BY 4.0) — ต้องคงลิงก์ "Designed By HTML Codex" ไว้ที่ footer ตามสัญญาอนุญาต
+ดีไซน์อิงจาก template [Mailler - SaaS Website Template](https://htmlcodex.com/saas-website-template) โดย HTML Codex (CC BY 4.0) — ต้องคงลิงก์ "Designed By HTML Codex" ไว้ที่ footer ตามสัญญาอนุญาต
 
 ## รันบนเครื่อง (dev)
 
