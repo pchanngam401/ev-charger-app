@@ -1,7 +1,7 @@
 'use client'
 
 import MapGL, { Marker, Popup, Source, Layer, type MarkerEvent } from 'react-map-gl/maplibre'
-import type { Map as MLMap } from 'maplibre-gl'
+import { getVersion, setWorkerUrl, type ExpressionSpecification, type Map as MLMap } from 'maplibre-gl'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import type { Station, NearbyResponse } from '@/types/station'
 import { getProviderBrand, type ProviderBrand } from '@/lib/providers'
@@ -31,9 +31,12 @@ const NAV_ZOOM = 16.5 // MapLibre ใช้ tile 512px → zoom น้อยก�
 const LOOK_AHEAD_RATIO = 0.22
 
 const MARKER_SIZE = 34
+
+// MapLibre 6 โหลด web worker จากไฟล์แยก — คัดลอกไว้ใน public/ ตอน npm install (ดู postinstall ใน package.json)
+setWorkerUrl(`/maplibre-gl-worker.mjs?v=${getVersion()}`)
 const MAP_STYLE = process.env.NEXT_PUBLIC_MAP_STYLE || 'https://tiles.openfreemap.org/styles/liberty'
 const NAV_PITCH = 45 // เอียงแผนที่ตอนนำทางแบบหมุนตามรถ (เห็นตึก 3D)
-const THAI_NAME = ['coalesce', ['get', 'name:th'], ['get', 'name'], ['get', 'name:latin']]
+const THAI_NAME: ExpressionSpecification = ['coalesce', ['get', 'name:th'], ['get', 'name'], ['get', 'name:latin']]
 
 // ใช้ชื่อภาษาไทยในป้ายชื่อทุกชั้น (ยกเว้นป้ายเลขทางหลวง/บ้านเลขที่ ที่ไม่ได้ใช้ชื่อ)
 function applyThaiLabels(m: MLMap): string | undefined {
@@ -363,7 +366,8 @@ export default function Map() {
       const res = await fetch(`${API_BASE}/stations/along-route`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ coords: thinCoords(r.coords, 200), buffer_m: km * 1000 }),
+        // ระยะห่างจุดอย่างน้อย 200 ม. และไม่เกิน ~1,500 จุด (API รับได้สูงสุด 2,000)
+        body: JSON.stringify({ coords: thinCoords(r.coords, Math.max(200, r.distance / 1500)), buffer_m: km * 1000 }),
         signal: ctrl.signal,
       })
       if (!res.ok) {

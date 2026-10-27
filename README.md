@@ -56,7 +56,8 @@ npm run dev                   # http://localhost:3000
 3. **Environment Variables**
    - `SUPABASE_URL` = URL โปรเจกต์ Supabase
    - `SUPABASE_KEY` = anon key
-4. Deploy → ทดสอบ `https://<api>.vercel.app/docs` และ `/stations/nearby?lat=13.7563&lng=100.5018&radius=5000`
+   - `API_SHARED_SECRET` = กุญแจลับร่วมกับเว็บ (ดูหัวข้อความปลอดภัย)
+4. Deploy → ทดสอบ `https://<api>.vercel.app/` (หน้า `/docs` ปิดบน production — เปิดได้ด้วย `ENABLE_DOCS=1`)
 
 ### 2) เว็บ — Next.js
 1. Import repo เดิมอีกครั้งเป็นโปรเจกต์ใหม่
@@ -67,11 +68,24 @@ npm run dev                   # http://localhost:3000
    - (ไม่บังคับ) `NEXT_PUBLIC_GEOCODER_URL` = เซิร์ฟเวอร์ Photon ของคุณเอง (ค้นหาแบบเร็ว)
    - (ไม่บังคับ) `NEXT_PUBLIC_NOMINATIM_URL` = เซิร์ฟเวอร์ Nominatim ของคุณเอง (ค้นหาแบบละเอียด)
    - (ไม่บังคับ) `NEXT_PUBLIC_MAP_STYLE` = สไตล์แผนที่ (ค่าเริ่มต้น `https://tiles.openfreemap.org/styles/liberty` — เปลี่ยนเป็น `.../positron` หรือ `.../bright` ได้)
+   - `API_SHARED_SECRET` = ค่าเดียวกับของโปรเจกต์ API
 4. Deploy
 
-> ถ้าแก้ `API_URL` ภายหลัง ต้อง **Redeploy** เว็บ เพราะค่า proxy ถูกกำหนดตอน build
+> แก้ Environment Variables ภายหลัง ต้อง **Redeploy** ทุกครั้ง
 
 หลังจากนี้ทุกครั้งที่ push ขึ้น `main` Vercel จะ deploy ให้อัตโนมัติ และทุก branch/PR จะได้ Preview URL แยก
+
+## ความปลอดภัย
+
+- **กุญแจลับร่วม `API_SHARED_SECRET`** — เว็บแนบกุญแจนี้ทุกครั้งที่ส่งต่อคำขอ `/api/*` (ใน `my-ev-web/proxy.ts`) และ API จะปฏิเสธคำขอที่ไม่มีกุญแจ (403) จึงเรียก API ตรงจากภายนอกไม่ได้
+  - สร้างค่าสุ่ม: `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+  - **ลำดับการตั้ง**: ตั้งที่โปรเจกต์ **เว็บก่อน** → Redeploy → แล้วค่อยตั้งที่โปรเจกต์ **API** → Redeploy (ถ้าตั้งที่ API ก่อน เว็บจะใช้ไม่ได้ช่วงหนึ่ง)
+  - ถ้าวันหนึ่งให้แอปมือถือเรียก API ตรง ต้องเปลี่ยนวิธียืนยันตัวตน (เช่น token ของผู้ใช้) เพราะกุญแจที่ฝังในแอปถูกแกะออกได้
+- **จำกัดจำนวนคำขอต่อ IP** ทั้งที่เว็บ (`WEB_RATE_LIMIT_*`) และ API (`RATE_LIMIT_*`) — นับแยกต่อ instance ของ serverless จึงเป็นการป้องกันพื้นฐาน ถ้าโดนยิงหนักให้เพิ่มกฎ Rate Limit ใน Vercel Firewall
+- **Security headers** (CSP, HSTS, X-Frame-Options ฯลฯ) ตั้งใน `my-ev-web/next.config.ts` — ถ้าเพิ่มบริการภายนอกใหม่ ต้องเพิ่มโดเมนใน CSP ด้วย
+- **Supabase**: ใช้ **anon key** เท่านั้น (ห้ามใช้ service_role) และเปิด **Row Level Security** ทุกตาราง — ตาราง `stations` ให้สิทธิ์อ่านอย่างเดียว
+- API เช็กอิน (`POST /stations/{id}/checkin`) ปิดไว้จนกว่าจะมีระบบล็อกอิน
+- ข้อความ error จากระบบเก็บใน log ของ Vercel เท่านั้น ผู้ใช้เห็นแค่ข้อความทั่วไป
 
 ## หมายเหตุ
 - ห้าม commit ไฟล์ `.env` / `.env.local` (มีใน `.gitignore` แล้ว) — ใช้ `.env.example` เป็นแม่แบบ

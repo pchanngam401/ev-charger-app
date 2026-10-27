@@ -1,22 +1,25 @@
+import logging
 import math
 import re
 
 from fastapi import APIRouter, HTTPException, Query
 from database import supabase
-from models import AlongRouteRequest, CheckInRequest
+from models import AlongRouteRequest
 from route_geo import bbox_with_buffer, stations_near_route
 
 router = APIRouter(prefix="/stations", tags=["Stations"])
+log = logging.getLogger("my-ev-api.stations")
 
 
 @router.get("")
 @router.get("/", include_in_schema=False)
-def get_all_stations(limit: int = Query(50, ge=1, le=1000)):
+def get_all_stations(limit: int = Query(50, ge=1, le=100)):
     try:
         response = supabase.table("stations").select("*").limit(limit).execute()
         return {"count": len(response.data), "data": response.data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        log.exception("supabase query failed")
+        raise HTTPException(status_code=502, detail="ดึงข้อมูลสถานีไม่สำเร็จ ลองใหม่อีกครั้ง")
 
 
 @router.get("/nearby")
@@ -31,8 +34,9 @@ def get_nearby_stations(
             {"user_lat": lat, "user_lng": lng, "radius_meters": radius},
         ).execute()
         return {"count": len(response.data), "data": response.data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        log.exception("supabase query failed")
+        raise HTTPException(status_code=502, detail="ดึงข้อมูลสถานีไม่สำเร็จ ลองใหม่อีกครั้ง")
 
 
 SEARCH_COLUMNS = ("Name", "Name_EN", "Address", "Provider", "Operator")
@@ -73,8 +77,9 @@ def search_stations(
         rows = fetch(0.5) if has_pos else []  # ~55 กม. รอบผู้ใช้ก่อน
         if len(rows) < limit:
             rows += fetch(None)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        log.exception("supabase query failed")
+        raise HTTPException(status_code=502, detail="ดึงข้อมูลสถานีไม่สำเร็จ ลองใหม่อีกครั้ง")
 
     needle = term.casefold()
     seen: set[str] = set()
@@ -131,23 +136,9 @@ def get_stations_along_route(payload: AlongRouteRequest):
             rows.extend(res.data)
             if len(res.data) < page:
                 break
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        log.exception("supabase query failed")
+        raise HTTPException(status_code=502, detail="ดึงข้อมูลสถานีไม่สำเร็จ ลองใหม่อีกครั้ง")
 
     data = stations_near_route(coords, rows, payload.buffer_m)
     return {"count": len(data), "buffer_m": payload.buffer_m, "data": data}
-
-
-@router.post("/{station_id}/checkin")
-def check_in_station(station_id: int, payload: CheckInRequest):
-    try:
-        checkin_data = {
-            "station_id": station_id,
-            "user_id": payload.user_id,
-            "status": payload.status,
-        }
-        # บันทึกลงตาราง check_ins (ต้องสร้างตารางนี้ใน Supabase ใน Phase 4)
-        response = supabase.table("check_ins").insert(checkin_data).execute()
-        return {"message": "Check-in successful", "data": response.data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))

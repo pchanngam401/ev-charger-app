@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# คัดลอกจาก node_modules ตอน npm install
+/public/maplibre-gl-worker.mjs

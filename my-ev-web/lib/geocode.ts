@@ -48,8 +48,9 @@ export async function searchPlaces(query: string, near?: LatLng | null, signal?:
   if (q.length < 2) return []
   const params = new URLSearchParams({ q, limit: String(PHOTON_FETCH), lang: 'default', bbox: THAILAND_BBOX })
   if (near) {
-    params.set('lat', near[0].toFixed(4))
-    params.set('lon', near[1].toFixed(4))
+    // ปัดพิกัดให้หยาบ (~100 ม.) พอสำหรับจัดลำดับ — ไม่ส่งตำแหน่งละเอียดของผู้ใช้ออกไปภายนอก
+    params.set('lat', near[0].toFixed(3))
+    params.set('lon', near[1].toFixed(3))
   }
   const res = await fetch(`${GEOCODER_URL}/api/?${params}`, { signal })
   if (!res.ok) throw new Error(`ค้นหาสถานที่ไม่สำเร็จ (${res.status})`)
@@ -114,8 +115,8 @@ export async function searchStations(query: string, near?: LatLng | null, signal
   if (q.length < 2) return []
   const params = new URLSearchParams({ q, limit: '5' })
   if (near) {
-    params.set('lat', near[0].toFixed(5))
-    params.set('lng', near[1].toFixed(5))
+    params.set('lat', near[0].toFixed(3)) // ~100 ม. พอสำหรับเรียงตามระยะ
+    params.set('lng', near[1].toFixed(3))
   }
   const res = await fetch(`/api/stations/search?${params}`, { signal })
   if (!res.ok) throw new Error(`ค้นหาสถานีไม่สำเร็จ (${res.status})`)
