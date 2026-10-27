@@ -1001,6 +1001,17 @@ export default function Map() {
           onLoad={(e) => {
             const m = e.target
             m.touchZoomRotate.disableRotation()
+            // MapLibre 6 บางครั้งไม่วาดใหม่หลังโหลด tile เสร็จ (แผนที่ว่างจนกว่าจะขยับ) → สั่งวาดเมื่อ tile โหลดเสร็จ
+            let repaintQueued = false
+            m.on('sourcedata', (ev) => {
+              if (!ev.tile || repaintQueued) return
+              repaintQueued = true
+              requestAnimationFrame(() => {
+                repaintQueued = false
+                m.triggerRepaint()
+              })
+            })
+            m.once('idle', () => m.triggerRepaint())
             setRouteBeforeId(applyThaiLabels(m))
             setMap(m)
           }}
