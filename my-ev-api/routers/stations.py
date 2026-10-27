@@ -37,6 +37,7 @@ def get_nearby_stations(
 
 SEARCH_COLUMNS = ("Name", "Name_EN", "Address", "Provider", "Operator")
 NAME_COLUMNS = ("Name", "Name_EN")
+BRAND_COLUMNS = ("Provider", "Operator")
 
 
 def _distance_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
@@ -54,7 +55,7 @@ def search_stations(
     lng: float | None = Query(None, ge=-180, le=180),
     limit: int = Query(8, ge=1, le=30),
 ):
-    """ค้นหาสถานีจากชื่อ (ไทย/อังกฤษ) ผู้ให้บริการ หรือที่อยู่ — ชื่อสถานีที่ตรงขึ้นก่อน แต่ละกลุ่มเรียงจากใกล้ตำแหน่งผู้ใช้"""
+    """ค้นหาสถานีจากชื่อ (ไทย/อังกฤษ) ผู้ให้บริการ หรือที่อยู่ — ชื่อหรือผู้ให้บริการที่ตรงเรียงจากใกล้ตำแหน่งผู้ใช้ ตรงแค่ที่อยู่ไว้ท้าย"""
     # ตัดอักขระที่มีความหมายพิเศษใน filter ของ PostgREST
     term = re.sub(r"\s+", " ", re.sub(r'[,()"*%\\]', " ", q)).strip()
     if len(term) < 2:
@@ -89,9 +90,15 @@ def search_stations(
         seen.add(key)
         row.pop("location", None)
         names = [str(row.get(c) or "").casefold() for c in NAME_COLUMNS]
-        row["match"] = "name" if any(needle in n for n in names) else "other"
+        brands = [str(row.get(c) or "").casefold() for c in BRAND_COLUMNS]
+        row["match"] = (
+            "name" if any(needle in n for n in names)
+            else "provider" if any(needle in n for n in brands)
+            else "address"
+        )
         row["distance_m"] = round(_distance_m(lat, lng, s_lat, s_lng)) if has_pos else None
-        row["_rank"] = (0 if row["match"] == "name" else 1, row["distance_m"] or 0)
+        # ชื่อสถานี/ผู้ให้บริการตรง → เรียงจากใกล้สุดรวมกัน, ตรงแค่ที่อยู่ → ไว้ท้าย
+        row["_rank"] = (1 if row["match"] == "address" else 0, row["distance_m"] or 0)
         out.append(row)
     out.sort(key=lambda r: r["_rank"])
     data = out[:limit]

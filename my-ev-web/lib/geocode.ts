@@ -18,7 +18,7 @@ export interface Place {
   distanceM: number | null // ระยะจากตำแหน่งผู้ใช้
 }
 
-export type StationResult = Station & { match: 'name' | 'other'; distance_m: number | null }
+export type StationResult = Station & { match: 'name' | 'provider' | 'address'; distance_m: number | null }
 
 // ระยะทางมีผลต่อลำดับแบบลอการิทึม: ใกล้กว่าขึ้นก่อน แต่ชื่อที่ตรงมากของ Photon ยังไม่หลุดลงไปไกล
 function rerankByDistance(list: Place[]): Place[] {
