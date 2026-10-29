@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
-import SiteNavbar from '@/components/site/SiteNavbar'
-import MapApp from '@/components/site/MapApp'
+import MapShell from '@/components/site/MapShell'
 
 export const metadata: Metadata = {
   title: 'แผนที่สถานีชาร์จ',
@@ -8,12 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function MapPage() {
-  return (
-    <div className="h-dvh flex flex-col overflow-hidden">
-      <SiteNavbar />
-      <main className="flex-1 min-h-0">
-        <MapApp />
-      </main>
-    </div>
-  )
+  return <MapShell />
 }

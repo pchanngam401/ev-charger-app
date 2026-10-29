@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { Menu, X, Zap } from 'lucide-react'
+import { ChevronUp, Menu, X, Zap } from 'lucide-react'
 
 const LINKS = [
   { href: '/', label: 'หน้าแรก' },
@@ -23,7 +23,8 @@ export function Brand() {
 }
 
 // แถบเมนูแบบ template: พื้นโปร่ง (ติดด้านบนแล้วเป็นสีม่วงอ่อน), ลิงก์สีเข้ม → ชมพูเมื่อ hover, ปุ่มแคปซูล 2 ปุ่ม
-export default function SiteNavbar({ overlay = false }: { overlay?: boolean }) {
+// onCollapse: มีปุ่มหุบแถบเมนู (ใช้ในหน้าแผนที่)
+export default function SiteNavbar({ overlay = false, onCollapse }: { overlay?: boolean; onCollapse?: () => void }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
@@ -90,6 +91,20 @@ export default function SiteNavbar({ overlay = false }: { overlay?: boolean }) {
           >
             {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
+          {onCollapse && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onCollapse()
+              }}
+              className="h-10 w-10 rounded-[10px] border border-gray-300 text-dark hover:border-primary hover:text-primary transition-colors flex items-center justify-center"
+              aria-label="ซ่อนแถบเมนู ขยายแผนที่"
+              title="ซ่อนแถบเมนู"
+            >
+              <ChevronUp className="w-5 h-5" />
+            </button>
+          )}
         </div>
       </nav>
 
